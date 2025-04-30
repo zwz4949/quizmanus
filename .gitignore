@@ -1,6 +1,8 @@
 # 忽略数据集文件夹
 dataset/
 quiz_results/
+PDF/
+
 
 # Python 相关
 __pycache__/
