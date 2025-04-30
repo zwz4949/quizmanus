@@ -20,12 +20,11 @@ from langgraph.types import Command
 from .quiz_types import State
 
 # 导入MinerU处理器
-from ..MinerU import MinerUProcessor
-
+from ..MinerU.core.processor import MinerUProcessor
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 # 创建MinerU处理器实例
 miner_processor = MinerUProcessor()
@@ -44,10 +43,12 @@ def miner_router(state: State) -> Command[Literal["pdf_processor", "image_proces
     
     # 检查是否有自定义知识库
     custom_kb = state.get("custom_knowledge_base", None)
+    print(f"heello:{custom_kb}")
     if custom_kb:
         kb_type = custom_kb.get("type")
         if kb_type == "pdf":
             logger.info("检测到PDF自定义知识库")
+            print("heello 检测到PDF自定义知识库")
             return Command(goto="pdf_processor")
         elif kb_type == "image":
             logger.info("检测到图片自定义知识库")

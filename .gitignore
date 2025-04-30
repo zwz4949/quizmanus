@@ -1,5 +1,6 @@
 # 忽略数据集文件夹
-./dataset/*
+dataset/
+quiz_results/
 
 # Python 相关
 __pycache__/
@@ -41,8 +42,7 @@ env/
 .env
 .env.local
 
-
-
 # 临时文件
 .DS_Store
 Thumbs.db
+ALL_KEYS.py

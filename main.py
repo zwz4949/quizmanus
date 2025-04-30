@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 from src.graph.builder import build_rag, build_main
 from langgraph.graph import MessagesState
 from dotenv import load_dotenv
@@ -80,7 +80,7 @@ def run():
         model = None
         tokenizer = None
     
-    test_file_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/test.json"
+    test_file_path = "/hpc2hdd/home/fye374/LJJ/quizmanus/dataset/test.json"
     save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_1072"
     os.makedirs(save_dir, exist_ok=True)
     tmp_test = getData(test_file_path)
@@ -89,9 +89,10 @@ def run():
     saveData(tmp_test, test_file_path)
     
     for idx, file_item in tqdm(enumerate(getData(test_file_path))):
+        print(f"#######开始生成 第{idx}个试卷")
         user_input = file_item['query']
         custom_kb = file_item.get('knowledge_base', None)  # 获取可选的知识库路径
-        
+        print(f'knowledge_base: {custom_kb}')
         # 初始化自定义知识库为None
         custom_knowledge_base = None
         
@@ -141,6 +142,6 @@ def statistic():
             cnt[key]+=item['eval_res'][key]
     for key in cnt:
         print(key,cnt[key]/len(eval_res))
-# run()
-test()
-statistic()
+run()
+# test()
+# statistic()
