@@ -18,8 +18,9 @@ from .nodes.nodes import (
 # 导入MinerU相关节点
 from .nodes.miner_nodes import (
     miner_router,
-    miner_processor,
-    custom_kb_processor,  # 添加自定义知识库处理节点
+    pdf_processor,
+    image_processor,
+    ppt_processor,
 )
 from .nodes.quiz_types import State
 
@@ -29,8 +30,9 @@ def build_main():
     builder.add_edge(START, "miner_router")
     # 添加MinerU相关节点
     builder.add_node("miner_router", miner_router)
-    builder.add_node("miner_processor", miner_processor)
-    builder.add_node("custom_kb_processor", custom_kb_processor)  # 添加自定义知识库处理节点
+    builder.add_node("pdf_processor", pdf_processor)
+    builder.add_node("image_processor", image_processor)
+    builder.add_node("ppt_processor", ppt_processor)
     # 原有节点
     builder.add_node("coordinator", main_coordinator)
     builder.add_node("supervisor", main_supervisor)
@@ -40,11 +42,10 @@ def build_main():
     builder.add_node("rag_er", main_rag)
     builder.add_node("rag_and_browser", main_rag_browser)
     
-    # 添加从miner_processor到coordinator的边
-    builder.add_edge("miner_processor", "coordinator")
-    # 添加从custom_kb_processor到coordinator的边
-    builder.add_edge("custom_kb_processor", "coordinator")
-    # 添加从miner_router到coordinator的边
+    # 添加从处理器到coordinator的边
+    builder.add_edge("pdf_processor", "coordinator")
+    builder.add_edge("image_processor", "coordinator")
+    builder.add_edge("ppt_processor", "coordinator")
     builder.add_edge("miner_router", "coordinator")
     
     return builder.compile()
@@ -58,3 +59,5 @@ def build_rag():
     builder.add_node("reranker", rag_reranker)
     builder.add_node("generator", rag_generator)
     return builder.compile()
+
+

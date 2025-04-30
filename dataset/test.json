@@ -1,0 +1,17 @@
+[
+
+    {
+        "id": 20,
+        "catalog": "高中政治",
+        "quiz_url": "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_1072/20.md",
+        "query": "设计7道政治（必修三：法治建设）题目，4宪法知识单选、2司法改革多选、1道全过程人民民主实践案例分析题，联系基层立法联系点制度",
+        "knowledge_base": "/hpc2hdd/home/fye374/LJJ/quizmanus/PDF/高途高考基础2000题-政治伴学讲义.pdf"
+        
+    },
+    {
+        "id": 20,
+        "catalog": "高中政治",
+        "quiz_url": "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_1072/20.md",
+        "query": "设计7道政治（必修三：法治建设）题目，4宪法知识单选、2司法改革多选、1道全过程人民民主实践案例分析题，联系基层立法联系点制度"
+    }
+]

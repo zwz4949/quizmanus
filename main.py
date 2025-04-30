@@ -105,15 +105,7 @@ def run():
                 }
             elif is_json_path(custom_kb):
                 # 加载JSON知识库
-                try:
-                    with open(custom_kb, 'r', encoding='utf-8') as f:
-                        custom_knowledge_base = {
-                            "type": "json",
-                            "data": json.load(f),
-                            "path": custom_kb
-                        }
-                except Exception as e:
-                    print(f"加载JSON知识库失败: {e}")
+                pass
 
         # 调用图执行
         graph.invoke({
