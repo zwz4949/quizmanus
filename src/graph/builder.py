@@ -15,11 +15,21 @@ from .nodes.nodes import (
     main_rag,
     main_rag_browser,
 )
+# 导入MinerU相关节点
+from .nodes.miner_nodes import (
+    miner_router,
+    miner_processor,
+)
 from .nodes.quiz_types import State
 
 def build_main():
     builder = StateGraph(State)
-    builder.add_edge(START, "coordinator")
+    # 修改入口点，先经过miner_router判断
+    builder.add_edge(START, "miner_router")
+    # 添加MinerU相关节点
+    builder.add_node("miner_router", miner_router)
+    builder.add_node("miner_processor", miner_processor)
+    # 原有节点
     builder.add_node("coordinator", main_coordinator)
     builder.add_node("supervisor", main_supervisor)
     builder.add_node("planner", main_planner)
@@ -27,6 +37,12 @@ def build_main():
     builder.add_node("reporter", main_reporter)
     builder.add_node("rag_er", main_rag)
     builder.add_node("rag_and_browser", main_rag_browser)
+    
+    # 添加从miner_processor到coordinator的边
+    builder.add_edge("miner_processor", "coordinator")
+    # 添加从miner_router到coordinator的边
+    builder.add_edge("miner_router", "coordinator")
+    
     return builder.compile()
 
 def build_rag():
