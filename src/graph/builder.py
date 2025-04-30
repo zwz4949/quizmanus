@@ -19,6 +19,7 @@ from .nodes.nodes import (
 from .nodes.miner_nodes import (
     miner_router,
     miner_processor,
+    custom_kb_processor,  # 添加自定义知识库处理节点
 )
 from .nodes.quiz_types import State
 
@@ -29,6 +30,7 @@ def build_main():
     # 添加MinerU相关节点
     builder.add_node("miner_router", miner_router)
     builder.add_node("miner_processor", miner_processor)
+    builder.add_node("custom_kb_processor", custom_kb_processor)  # 添加自定义知识库处理节点
     # 原有节点
     builder.add_node("coordinator", main_coordinator)
     builder.add_node("supervisor", main_supervisor)
@@ -40,6 +42,8 @@ def build_main():
     
     # 添加从miner_processor到coordinator的边
     builder.add_edge("miner_processor", "coordinator")
+    # 添加从custom_kb_processor到coordinator的边
+    builder.add_edge("custom_kb_processor", "coordinator")
     # 添加从miner_router到coordinator的边
     builder.add_edge("miner_router", "coordinator")
     

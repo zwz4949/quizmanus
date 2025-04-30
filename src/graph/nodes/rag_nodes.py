@@ -140,30 +140,104 @@ def rag_router(state: State):
 
 
 # 3. 检索执行组件
-def rag_retrieve(state:State):
+# 修改检索函数，支持自定义知识库
+def rag_retrieve(state: State):
     query_embeddings = state["rag"]['embedding_model']([state["rag"]['hyde_query']])
     
+    # 检查是否使用自定义知识库
+    use_custom_kb = state.get("use_custom_kb", False)
+    custom_kb = state.get("custom_knowledge_base", None)
     
-    col = get_collection(DB_URI,COLLECTION_NAME)
-    hybrid_results = hybrid_search(
-        col,
-        query_embeddings["dense"][0],
-        query_embeddings["sparse"]._getrow(0),
-        subject_value=state["rag"]['subject'],  # 指定 subject 值
-        sparse_weight=0.7,
-        dense_weight=1.0,
-        limit = 10
+    if use_custom_kb and custom_kb:
+        logger.info("Using custom knowledge base for retrieval")
+        kb_type = custom_kb.get("type", "unknown")
+        
+        if kb_type == "pdf":
+            # 使用处理后的PDF内容作为检索结果
+            processed_content = custom_kb.get("processed_content", "")
+            if not processed_content:
+                logger.warning("Custom PDF knowledge base has no processed content")
+                # 如果没有处理后的内容，使用默认知识库
+                return default_retrieval(state, query_embeddings)
+            
+            # 直接使用PDF内容作为检索结果
+            logger.info("Using processed PDF content as retrieval result")
+            updated_rag = {
+                **state['rag'],
+                "retrieved_docs": [processed_content]
+            }
+            return Command(
+                update={
+                    "rag": updated_rag
+                },
+                goto="reranker"
+            )
+        
+        elif kb_type == "json":
+            # 使用JSON数据作为检索结果
+            json_data = custom_kb.get("data", [])
+            if not json_data:
+                logger.warning("Custom JSON knowledge base has no data")
+                # 如果没有数据，使用默认知识库
+                return default_retrieval(state, query_embeddings)
+            
+            # 简单处理：将JSON数据转换为文本
+            if isinstance(json_data, list):
+                # 如果是列表，拼接所有项
+                retrieved_docs = ["\n\n".join([str(item) for item in json_data])]
+            elif isinstance(json_data, dict):
+                # 如果是字典，拼接所有值
+                retrieved_docs = ["\n\n".join([str(v) for v in json_data.values()])]
+            else:
+                # 其他情况，直接转为字符串
+                retrieved_docs = [str(json_data)]
+            
+            logger.info("Using JSON data as retrieval result")
+            updated_rag = {
+                **state['rag'],
+                "retrieved_docs": retrieved_docs
+            }
+            return Command(
+                update={
+                    "rag": updated_rag
+                },
+                goto="reranker"
+            )
+    
+    # 如果没有自定义知识库或者处理失败，使用默认检索
+    return default_retrieval(state, query_embeddings)
+
+def default_retrieval(state, query_embeddings):
+    # 默认的向量检索逻辑
+    logger.info("Using default vector retrieval")
+    collection = get_collection(DB_URI, COLLECTION_NAME)
+    
+    # 使用混合检索
+    search_params = {
+        "subject": state["rag"]["subject"],
+        "limit": 5,
+        "expr": None
+    }
+    
+    results = hybrid_search(
+        collection=collection,
+        query_embeddings=query_embeddings,
+        **search_params
     )
-    # print("retrieved_docs",hybrid_results)
+    
+    # 提取检索结果
+    retrieved_docs = [item["content"] for item in results]
+    
     updated_rag = {
         **state['rag'],
-        "retrieved_docs": hybrid_results
+        "retrieved_docs": retrieved_docs
     }
+    
     return Command(
-        update = {
-            "rag":updated_rag
+        update={
+            "rag": updated_rag
         },
-        goto = "reranker"
+        goto="reranker"
     )
 
 

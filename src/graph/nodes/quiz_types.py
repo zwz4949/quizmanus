@@ -54,5 +54,9 @@ class State(MessagesState):
     generate_tokenizer: AutoTokenizer
     generate_model: Optional[Union[AutoModelForCausalLM, PeftModel]]
     quiz_url: str
+    # 在State类型中添加custom_knowledge_base字段
+    State = TypedDict("State", {
+        "custom_knowledge_base": Optional[Dict[str, Any]],  # 添加自定义知识库字段
+    })
 
 
