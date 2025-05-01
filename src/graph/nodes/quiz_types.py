@@ -54,7 +54,7 @@ class State(MessagesState):
     generate_tokenizer: AutoTokenizer
     generate_model: Optional[Union[AutoModelForCausalLM, PeftModel]]
     quiz_url: str
-    custom_knowledge_base: Optional[Dict[str, any]], 
+    custom_knowledge_base: Optional[Dict[str, any]]
     
 
 

@@ -214,19 +214,19 @@ def default_retrieval(state, query_embeddings):
     
     # 使用混合检索
     search_params = {
-        "subject": state["rag"]["subject"],
-        "limit": 5,
-        "expr": None
+        "subject_value": state["rag"]["subject"],
+        "limit": 5
     }
     
     results = hybrid_search(
-        collection=collection,
-        query_embeddings=query_embeddings,
+        col=collection,
+        query_dense_embedding=query_embeddings[0],
+        query_sparse_embedding=query_embeddings[0],
         **search_params
     )
     
     # 提取检索结果
-    retrieved_docs = [item["content"] for item in results]
+    retrieved_docs = results
     
     updated_rag = {
         **state['rag'],
