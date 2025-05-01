@@ -27,7 +27,7 @@ from ...utils import get_json_result
 import logging
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 def rag_hyde(state: State):
     # 1. 定义 JSON 输出解析器
     parser = JsonOutputParser()
@@ -147,7 +147,7 @@ def rag_retrieve(state: State):
     # 检查是否使用自定义知识库
     use_custom_kb = state.get("use_custom_kb", False)
     custom_kb = state.get("custom_knowledge_base", None)
-    
+    print(f'state: rag_retrieve\n use_custom_kb:{use_custom_kb},custom_kb:{custom_kb}')
     if use_custom_kb and custom_kb:
         logger.info("Using custom knowledge base for retrieval")
         kb_type = custom_kb.get("type", "unknown")
@@ -155,11 +155,13 @@ def rag_retrieve(state: State):
         if kb_type == "pdf":
             # 使用处理后的PDF内容作为检索结果
             processed_content = custom_kb.get("processed_content", "")
+            print(f'processed_content:{processed_content[:50]}')
             if not processed_content:
                 logger.warning("Custom PDF knowledge base has no processed content")
                 # 如果没有处理后的内容，使用默认知识库
                 return default_retrieval(state, query_embeddings)
-            
+            print(f'heelo: pdf')
+
             # 直接使用PDF内容作为检索结果
             logger.info("Using processed PDF content as retrieval result")
             updated_rag = {
@@ -208,38 +210,48 @@ def rag_retrieve(state: State):
     return default_retrieval(state, query_embeddings)
 
 def default_retrieval(state, query_embeddings):
-    # 默认的向量检索逻辑
-    logger.info("Using default vector retrieval")
-    collection = get_collection(DB_URI, COLLECTION_NAME)
+    # 检查 query_embeddings 的类型和结构
+    logger.info(f"Query embeddings type: {type(query_embeddings)}")
     
-    # 使用混合检索
-    search_params = {
-        "subject_value": state["rag"]["subject"],
-        "limit": 5
-    }
+    # 如果 query_embeddings 是字典类型，直接使用它
+    if isinstance(query_embeddings, dict):
+        query_dense_embedding = query_embeddings
+    # 如果是列表且有元素，使用第一个元素
+    elif isinstance(query_embeddings, list) and len(query_embeddings) > 0:
+        query_dense_embedding = query_embeddings[0]
+    else:
+        # 如果是其他情况，记录错误并返回空结果
+        logger.error(f"Unexpected query_embeddings format: {query_embeddings}")
+        updated_rag = {
+            **state['rag'],
+            "retrieved_docs": ["无法检索到相关文档，请尝试其他查询方式。"]
+        }
+        return Command(
+            update={
+                "rag": updated_rag
+            },
+            goto="reranker"
+        )
     
-    results = hybrid_search(
-        col=collection,
-        query_dense_embedding=query_embeddings[0],
-        query_sparse_embedding=query_embeddings[0],
-        **search_params
+    # 使用正确处理后的 query_dense_embedding 进行检索
+    collection = get_collection(DB_URI, COLLECTION_NAME, state["rag"]["subject"])
+    retrieved_docs = hybrid_search(
+        collection=collection,
+        query=state["rag"]['hyde_query'],
+        query_dense_embedding=query_dense_embedding,
+        limit=10
     )
-    
-    # 提取检索结果
-    retrieved_docs = results
     
     updated_rag = {
         **state['rag'],
         "retrieved_docs": retrieved_docs
     }
-    
     return Command(
         update={
             "rag": updated_rag
         },
         goto="reranker"
     )
-
 
 def rag_reranker(state: State):
     reranked_docs = rerank(

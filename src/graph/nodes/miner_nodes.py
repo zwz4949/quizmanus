@@ -40,7 +40,8 @@ def miner_router(state: State) -> Command[Literal["pdf_processor", "image_proces
         Command: 下一步操作的命令
     """
     logger.info("MinerU router checking input")
-    
+    print(f'State: miner_router')
+
     # 检查是否有自定义知识库
     custom_kb = state.get("custom_knowledge_base", None)
     print(f"heello:{custom_kb}")
@@ -73,7 +74,8 @@ def pdf_processor(state: State) -> Command[Literal["coordinator"]]:
     """
     logger.info("MinerU PDF处理器启动")
     pdf_path = state["custom_knowledge_base"]['path']
-    
+    print(f'State: pdf_processor')
+
     try:
         # 使用MinerU处理器处理PDF
         result = miner_processor.process_custom_kb({"type": "pdf", "path": pdf_path})

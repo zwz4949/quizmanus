@@ -31,6 +31,7 @@ def main_coordinator(state: State) -> Command[Literal["planner", "__end__"]]:
     """Coordinator node that communicate with customers."""
     logger.info("Coordinator talking.")
     system_message = get_prompt_template("coordinator")
+    print(f'State: main_coordinator')
     messages = [
         SystemMessage(
             content = system_message
