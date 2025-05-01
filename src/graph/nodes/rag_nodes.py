@@ -154,7 +154,7 @@ def rag_retrieve(state: State):
             processed_content = custom_kb.get("processed_content", "")
             # 创建集合并插入数据
             col = get_collection_minerU(
-                context=context,
+                context=processed_content,
                 uri=DB_URI,
                 embedding_model=state["rag"]['embedding_model'],
                 text_max_length=4096,  # 增加文本长度限制
