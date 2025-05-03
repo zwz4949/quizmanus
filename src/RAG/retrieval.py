@@ -81,7 +81,7 @@ def hybrid_search(
     sparse_weight=1.0,
     dense_weight=1.0,
     limit=10,
-):
+):  
     dense_search_params = {"metric_type": "IP", "params": {}}
     dense_req = AnnSearchRequest(
         [query_dense_embedding], 

@@ -9,6 +9,7 @@ from pymilvus import (
 
 from typing import List,Dict
 from tqdm import tqdm
+import re
 
 def create_collection(db_uri,col_name, dense_dim):
     '''
@@ -97,4 +98,204 @@ def add_data(col, data,docs_embeddings):
         return
     print(f"添加成功")
     
+def get_collection_minerU(context, uri, embedding_model, 
+                            col_name="user_docs", 
+                            chunk_size=800, 
+                            overlap=200,
+                            batch_size=200,  # 增加批处理大小
+                            text_max_length=2048,
+                            consistency_level="Strong",
+                            num_workers=4):  # 添加并行处理的工作线程数
+    """
+    将文本内容处理并存入Milvus向量数据库
     
+    Args:
+        context (str): 文本内容
+        uri (str): Milvus数据库URI
+        embedding_model: 嵌入模型
+        col_name (str): 集合名称
+        chunk_size (int): 文本切片大小
+        overlap (int): 切片重叠大小
+        batch_size (int): 批量插入大小
+        text_max_length (int): 文本字段最大长度
+        consistency_level (str): 一致性级别，可选"Strong"或"Eventually"
+        num_workers (int): 并行处理的工作线程数
+        
+    Returns:
+        Collection: Milvus集合对象
+    """
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    import numpy as np
+    from scipy.sparse import vstack
+    
+    start_time = time.time()
+    
+    # 连接到Milvus
+    connections.connect(uri=uri)
+    
+    # 1. 文档切片
+    print("开始文档切片...")
+    documents = slice_document_by_heading(context)
+    
+    print(f"文档切片完成，共{len(documents)}个切片，耗时: {time.time() - start_time:.2f} 秒")
+    
+    # 2. 生成嵌入向量 (并行处理)
+    embed_start_time = time.time()
+    print("开始生成嵌入向量...")
+    
+    # 将文档分成多个批次
+    batches = [documents[i:i+batch_size] for i in range(0, len(documents), batch_size)]
+    
+    # 定义批处理函数
+    def process_batch(batch_texts):
+        return embedding_model(batch_texts)
+    
+    # 并行处理每个批次，并添加进度条
+    all_embeddings = {"sparse": [], "dense": []}
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        # 使用tqdm显示进度
+        batch_results = list(tqdm(
+            executor.map(process_batch, batches),
+            total=len(batches),
+            desc="生成嵌入向量"
+        ))
+    
+    # 合并结果
+    for result in batch_results:
+        all_embeddings["sparse"].append(result["sparse"])
+        all_embeddings["dense"].extend(result["dense"])
+    
+    # 合并稀疏矩阵
+    if all_embeddings["sparse"]:
+        all_embeddings["sparse"] = vstack(all_embeddings["sparse"])
+    
+    docs_embeddings = all_embeddings
+    
+    print(f"嵌入向量生成完成，耗时: {time.time() - embed_start_time:.2f} 秒")
+
+    # 3. 创建集合
+    collection_start_time = time.time()
+    print("开始创建集合...")
+    
+    fields = [
+        FieldSchema(name="pk", dtype=DataType.VARCHAR, is_primary=True, auto_id=True, max_length=100),
+        FieldSchema(name="subject", dtype=DataType.VARCHAR, max_length=128),
+        FieldSchema(name="grade", dtype=DataType.VARCHAR, max_length=128),
+        FieldSchema(name="title", dtype=DataType.VARCHAR, max_length=128),
+        FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=text_max_length),
+
+        FieldSchema(name="sparse_vector", dtype=DataType.SPARSE_FLOAT_VECTOR),
+        FieldSchema(name="dense_vector", dtype=DataType.FLOAT_VECTOR, dim=embedding_model.dim["dense"]),
+    ]
+    
+    schema = CollectionSchema(fields)
+    
+    # 如果集合已存在，则删除
+    if utility.has_collection(col_name):
+        Collection(col_name).drop()
+    
+    # 创建新集合
+    col = Collection(col_name, schema, consistency_level=consistency_level)
+    
+    print(f"集合创建完成，耗时: {time.time() - collection_start_time:.2f} 秒")
+    
+    # 5. 批量插入数据 (先插入数据，后创建索引)
+    insert_start_time = time.time()
+    print("开始插入数据...")
+    
+    try:
+        # 使用tqdm显示总体进度
+        for i in tqdm(range(0, len(documents), batch_size), desc="批量插入数据"):
+            end_idx = min(i + batch_size, len(documents))
+            
+            # 准备批量数据
+            titles = []
+            contents = []
+            sparse_vectors = []
+            dense_vectors = []
+            
+            for j in range(i, end_idx):
+                # 从文档中提取标题和内容
+                doc_parts = documents[j].split('\n', 1)
+                title = doc_parts[0].replace('# ', '') if len(doc_parts) > 0 else "无标题"
+                content = doc_parts[1] if len(doc_parts) > 1 else documents[j]
+                
+                titles.append(title)
+                contents.append(content)
+                sparse_vectors.append(docs_embeddings["sparse"]._getrow(j).todok())
+                dense_vectors.append(docs_embeddings["dense"][j])
+            
+            # 构建批量插入数据
+            batch_data = [
+                [None] * len(titles),  # subject 字段，全部为 None
+                [None] * len(titles),  # grade 字段，全部为 None
+                titles,                # title 字段
+                contents,              # content 字段
+                sparse_vectors,        # sparse_vector 字段
+                dense_vectors          # dense_vector 字段
+            ]
+            
+            # 批量插入
+            col.insert(batch_data)
+        
+        print(f"数据插入完成，共{col.num_entities}条记录，耗时: {time.time() - insert_start_time:.2f} 秒")
+        
+        # 4. 创建索引 (移到数据插入后)
+        index_start_time = time.time()
+        print("开始创建索引...")
+        
+        sparse_index = {"index_type": "SPARSE_INVERTED_INDEX", "metric_type": "IP"}
+        col.create_index("sparse_vector", sparse_index)
+        
+        dense_index = {"index_type": "AUTOINDEX", "metric_type": "IP"}
+        col.create_index("dense_vector", dense_index)
+        
+        print(f"索引创建完成，耗时: {time.time() - index_start_time:.2f} 秒")
+    except Exception as e:
+        print(f"处理失败，原因：{e}")
+        return None
+    
+    # 加载集合以便搜索
+    load_start_time = time.time()
+    print("开始加载集合...")
+    col.load()
+    print(f"集合加载完成，耗时: {time.time() - load_start_time:.2f} 秒")
+    
+    total_time = time.time() - start_time
+    print(f"总处理时间: {total_time:.2f} 秒")
+    
+    return col
+
+def slice_document_by_heading(context):
+    """
+    根据单个#标题格式切片文档
+    支持以下格式:
+    1. "#" 开头的标题 (如 "# 标题")
+    """
+    # 预处理：去除每行开头的空白字符
+    lines = context.split('\n')
+    cleaned_lines = [line.strip() for line in lines]
+    context = '\n'.join(cleaned_lines)
+    
+    # 确保文档以换行符开始和结束，便于匹配
+    context = "\n" + context.strip() + "\n"
+    
+    # 匹配单个#开头的标题格式
+    pattern = r'(?:\n)(# .+?)(?:\n)(.+?)(?=\n# .+?|\Z)'
+    matches = re.findall(pattern, context, re.DOTALL)
+    
+    # 如果没有匹配到任何标题，尝试按段落切分
+    if not matches:
+        print("未找到标题匹配，将按段落切分")
+        return slice_by_paragraphs(context, max_length=800)
+    
+    documents = []
+    for match in matches:
+        title = match[0].strip()
+        content = match[1].strip()
+        # 过滤掉过短的内容
+        if len(content) > 20:  # 可以调整最小内容长度
+            documents.append(f"{title}\n{content}")
+    
+    return documents
