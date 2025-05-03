@@ -102,7 +102,7 @@ def run():
                 # PDF将由miner_processor处理，这里只需标记类型
                 custom_knowledge_base = {
                     "type": "pdf",
-                    "path": custom_kb
+                    "path": custom_kb,
                 }
             elif is_json_path(custom_kb):
                 # 加载JSON知识库
@@ -117,7 +117,7 @@ def run():
             "search_before_planning": False,
             "generate_tokenizer": tokenizer,
             "generate_model": model,
-            "custom_knowledge_base": custom_knowledge_base,  # 添加自定义知识库
+            "custom_knowledge_base": custom_knowledge_base, 
             "rag": {
                 "embedding_model": embeddings,
                 "reranker_model": reranker

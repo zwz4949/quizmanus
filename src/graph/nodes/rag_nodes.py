@@ -16,8 +16,8 @@ from ..llms.llms import get_llm_by_type
 
 from ..agents.agents import knowledge_based_browser
 
-from ...config.rag import DB_URI, COLLECTION_NAME, SUBJECTS
-from ...RAG.vector_store_utils import get_collection
+from ...config.rag import DB_URI, COLLECTION_NAME, SUBJECTS,TEMP_DB_URI
+from ...RAG.vector_store_utils import get_collection,get_collection_minerU
 from ...RAG.retrieval import hybrid_search
 from ...RAG.reranker import rerank
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -25,6 +25,8 @@ from ...config.llms import llm_type,generator_model
 from ...config.nodes import QUESTION_TYPES
 from ...utils import get_json_result
 import logging
+
+# 导入临时数据库URI
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -139,119 +141,79 @@ def rag_router(state: State):
     )
 
 
+
+
 # 3. 检索执行组件
 # 修改检索函数，支持自定义知识库
 def rag_retrieve(state: State):
     query_embeddings = state["rag"]['embedding_model']([state["rag"]['hyde_query']])
     
-    # 检查是否使用自定义知识库
-    use_custom_kb = state.get("use_custom_kb", False)
     custom_kb = state.get("custom_knowledge_base", None)
-    print(f'state: rag_retrieve\n use_custom_kb:{use_custom_kb},custom_kb:{custom_kb}')
-    if use_custom_kb and custom_kb:
+    if custom_kb:
         logger.info("Using custom knowledge base for retrieval")
         kb_type = custom_kb.get("type", "unknown")
         
         if kb_type == "pdf":
-            # 使用处理后的PDF内容作为检索结果
-            processed_content = custom_kb.get("processed_content", "")
-            print(f'processed_content:{processed_content[:50]}')
-            if not processed_content:
-                logger.warning("Custom PDF knowledge base has no processed content")
-                # 如果没有处理后的内容，使用默认知识库
-                return default_retrieval(state, query_embeddings)
-            print(f'heelo: pdf')
-
-            # 直接使用PDF内容作为检索结果
-            logger.info("Using processed PDF content as retrieval result")
-            updated_rag = {
-                **state['rag'],
-                "retrieved_docs": [processed_content]
-            }
-            return Command(
-                update={
-                    "rag": updated_rag
-                },
-                goto="reranker"
-            )
-        
-        elif kb_type == "json":
-            # 使用JSON数据作为检索结果
-            json_data = custom_kb.get("data", [])
-            if not json_data:
-                logger.warning("Custom JSON knowledge base has no data")
-                # 如果没有数据，使用默认知识库
-                return default_retrieval(state, query_embeddings)
-            
-            # 简单处理：将JSON数据转换为文本
-            if isinstance(json_data, list):
-                # 如果是列表，拼接所有项
-                retrieved_docs = ["\n\n".join([str(item) for item in json_data])]
-            elif isinstance(json_data, dict):
-                # 如果是字典，拼接所有值
-                retrieved_docs = ["\n\n".join([str(v) for v in json_data.values()])]
+            # 检查是否已有处理好的集合
+            if "collection" in custom_kb:
+                # 直接使用已处理好的集合
+                col = custom_kb["collection"]
+                logger.info("使用已处理好的向量集合")
             else:
-                # 其他情况，直接转为字符串
-                retrieved_docs = [str(json_data)]
-            
-            logger.info("Using JSON data as retrieval result")
+                processed_content = custom_kb.get("processed_content", "")
+                # 创建集合并插入数据
+                col = get_collection_minerU(
+                    context=processed_content,
+                    uri=TEMP_DB_URI,  # 使用临时数据库URI
+                    embedding_model=state["rag"]['embedding_model'],
+                    text_max_length=4096,
+                    batch_size=100
+                )
+ 
+            hybrid_results = hybrid_search(
+                col,
+                query_embeddings["dense"][0],
+                query_embeddings["sparse"]._getrow(0),
+                subject_value=state["rag"]['subject'],  # 指定 subject 值
+                sparse_weight=0.7,
+                dense_weight=1.0,
+                limit = 10
+            )
             updated_rag = {
                 **state['rag'],
-                "retrieved_docs": retrieved_docs
+                "retrieved_docs": hybrid_results
             }
+            print(f'from PDF to RAG')
             return Command(
-                update={
-                    "rag": updated_rag
+                update = {
+                    "rag":updated_rag
                 },
-                goto="reranker"
-            )
-    
-    # 如果没有自定义知识库或者处理失败，使用默认检索
-    return default_retrieval(state, query_embeddings)
-
-def default_retrieval(state, query_embeddings):
-    # 检查 query_embeddings 的类型和结构
-    logger.info(f"Query embeddings type: {type(query_embeddings)}")
-    
-    # 如果 query_embeddings 是字典类型，直接使用它
-    if isinstance(query_embeddings, dict):
-        query_dense_embedding = query_embeddings
-    # 如果是列表且有元素，使用第一个元素
-    elif isinstance(query_embeddings, list) and len(query_embeddings) > 0:
-        query_dense_embedding = query_embeddings[0]
+                goto = "reranker"
+        )
     else:
-        # 如果是其他情况，记录错误并返回空结果
-        logger.error(f"Unexpected query_embeddings format: {query_embeddings}")
+        col = get_collection(DB_URI, COLLECTION_NAME)  # 这里保留原始数据库URI
+        hybrid_results = hybrid_search(
+            col,
+            query_embeddings["dense"][0],
+            query_embeddings["sparse"]._getrow(0),
+            subject_value=state["rag"]['subject'],  # 指定 subject 值
+            sparse_weight=0.7,
+            dense_weight=1.0,
+            limit = 10
+        )
+        # print("retrieved_docs",hybrid_results)
         updated_rag = {
             **state['rag'],
-            "retrieved_docs": ["无法检索到相关文档，请尝试其他查询方式。"]
+            "retrieved_docs": hybrid_results
         }
+    
         return Command(
-            update={
-                "rag": updated_rag
+            update = {
+                "rag":updated_rag
             },
-            goto="reranker"
+            goto = "reranker"
         )
-    
-    # 使用正确处理后的 query_dense_embedding 进行检索
-    collection = get_collection(DB_URI, COLLECTION_NAME, state["rag"]["subject"])
-    retrieved_docs = hybrid_search(
-        collection=collection,
-        query=state["rag"]['hyde_query'],
-        query_dense_embedding=query_dense_embedding,
-        limit=10
-    )
-    
-    updated_rag = {
-        **state['rag'],
-        "retrieved_docs": retrieved_docs
-    }
-    return Command(
-        update={
-            "rag": updated_rag
-        },
-        goto="reranker"
-    )
+
 
 def rag_reranker(state: State):
     reranked_docs = rerank(
@@ -259,7 +221,6 @@ def rag_reranker(state: State):
         search_results = state["rag"]['retrieved_docs'], 
         reranker = state["rag"]['reranker_model'],
         topk = 1)
-    # print("reranked_docs",reranked_docs)
     updated_rag = {
         **state['rag'], 
         "reranked_docs": reranked_docs,
@@ -309,7 +270,6 @@ def rag_generator(state: State):
     parser = JsonOutputParser()
     
     pass_qa = str(state["existed_qa"])
-    # print(state["rag"]["rerank_docs"])
     if len(state["rag"]["reranked_docs"]) == 0:
         context = "\n\n".join(
             state["rag"]["retrieved_docs"]
@@ -318,7 +278,7 @@ def rag_generator(state: State):
         context = "\n\n".join(
             state["rag"]["reranked_docs"]
         )
-        
+    print(context)
     
     if generator_model == "qwen":
         SYSTEM_PROMPT = '''# 角色说明
