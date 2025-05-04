@@ -38,21 +38,45 @@ def main_coordinator(state: State) -> Command[Literal["planner", "__end__"]]:
         ),
         HumanMessage(content=f'''当前查询：{state["ori_query"]}''')
     ]
-    response_content = get_llm_by_type(type = llm_type).invoke(messages).content
+    
+    try:
+        # 尝试获取响应
+        response = get_llm_by_type(type = llm_type).invoke(messages)
+        response_content = response.content
+        
+        # 打印原始响应内容以便调试
+        print("原始API响应:", response_content[:200])
+        
+    except json.JSONDecodeError as e:
+        # 捕获JSON解析错误
+        print(f"JSON解析错误: {e}")
+        print(f"尝试修复JSON响应...")
+        
+        # 尝试提取有效的JSON部分
+        import re
+        json_pattern = r'(\{.*\})'
+        match = re.search(json_pattern, str(response))
+        if match:
+            response_content = match.group(1)
+        else:
+            response_content = "{}"
+            
+    except Exception as e:
+        print(f"调用LLM时出错: {e}")
+        response_content = "{}"
+    
     logger.debug(f"Current state messages: {state['messages']}")
-    # 尝试修复可能的JSON输出
     logger.debug(f"Coordinator response: {response_content}")
 
     goto = "__end__"
     if "handoff_to_planner" in response_content:
         goto = "planner"
 
-    # 更新response.content为修复后的内容
-    # response.content = response_content
-
     return Command(
         goto=goto,
     )
+
+
 def main_planner(state: State):
     parser = JsonOutputParser()
     def inner_router():
@@ -143,6 +167,10 @@ def main_supervisor(state: State) -> Command[Literal[*TEAM_MEMBERS, "__end__"]]:
     # preprocess messages to make supervisor execute better.
     messages = deepcopy(messages)
     reports = []
+    print("="*50)
+    print("Supervisor 原始输出:")
+    print(messages)
+    print("="*50)
     for message in messages:
         if isinstance(message, BaseMessage) and message.name in TEAM_MEMBERS:
             if message.name == "reporter":

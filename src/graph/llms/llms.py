@@ -3,6 +3,7 @@ from openai import OpenAI
 import ollama
 import sys
 from ...config.llms import openai_model, openai_api_key, openai_api_base, ollama_model
+import httpx  
 
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
@@ -111,39 +112,6 @@ def get_llm_by_type(type,model = None,tokenizer = None):
                 add_generation_prompt=False,
                 # continue_final_message=True
             )
-            return prompt.replace("\n<|im_end|>\n",'')+"\n"
-        def single_generate(x, model, tokenizer):
-            # 将模型移动到当前设备（如果尚未移动）
-            model.to(device)
-            
-            # 单条输入处理并移动到相同设备
-            inputs = tokenizer(
-                prepare_input(x, tokenizer), 
-                return_tensors="pt", 
-                padding=True,
-                truncation=True
-            ).to(device)  # 关键修改：整个inputs移动到模型所在设备
-            
-            # 单条生成
-            generated_ids = model.generate(
-                input_ids=inputs.input_ids,
-                attention_mask=inputs.attention_mask,
-                max_new_tokens=1024,
-                do_sample=True,
-                temperature=0.7,
-                top_p=0.9,
-                pad_token_id=tokenizer.pad_token_id,
-                use_cache=True,
-                repetition_penalty=1.1
-            )
-            
-            # 解码单条结果（注意移回CPU再解码）
-            completion_ids = generated_ids[0][len(inputs.input_ids[0]):].cpu()
-            return tokenizer.decode(completion_ids, skip_special_tokens=True)
-        
-            
-        # 将模型包装为 Runnable
-        llm = RunnableLambda(lambda x: single_generate(x, model, tokenizer))
-    return llm
+            return prompt.replace("\n
     
 
