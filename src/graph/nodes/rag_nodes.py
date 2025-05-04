@@ -141,6 +141,8 @@ def rag_router(state: State):
     )
 
 
+
+
 # 3. 检索执行组件
 # 修改检索函数，支持自定义知识库
 def rag_retrieve(state: State):
@@ -181,8 +183,15 @@ def rag_retrieve(state: State):
                 **state['rag'],
                 "retrieved_docs": hybrid_results
             }
+            print(f'from PDF to RAG')
+            return Command(
+                update = {
+                    "rag":updated_rag
+                },
+                goto = "reranker"
+        )
     else:
-        col = get_collection(DB_URI, COLLECTION_NAME)  # 这里保留原始数据库URI
+        col = get_collection(DB_URI, COLLECTION_NAME)   
         hybrid_results = hybrid_search(
             col,
             query_embeddings["dense"][0],
@@ -198,12 +207,14 @@ def rag_retrieve(state: State):
             "retrieved_docs": hybrid_results
         }
     
-    return Command(
-        update = {
-            "rag":updated_rag
-        },
-        goto = "reranker"
-    )
+        return Command(
+            update = {
+                "rag":updated_rag
+            },
+            goto = "reranker"
+        )
+
+
 
 
 
@@ -259,12 +270,12 @@ def rag_reranker(state: State):
     )
 
 
+
 # 6. 生成组件
 def rag_generator(state: State):
     parser = JsonOutputParser()
     
     pass_qa = str(state["existed_qa"])
-    # print(state["rag"]["rerank_docs"])
     if len(state["rag"]["reranked_docs"]) == 0:
         context = "\n\n".join(
             state["rag"]["retrieved_docs"]
@@ -273,7 +284,6 @@ def rag_generator(state: State):
         context = "\n\n".join(
             state["rag"]["reranked_docs"]
         )
-        
     
     if generator_model == "qwen":
         SYSTEM_PROMPT = '''# 角色说明

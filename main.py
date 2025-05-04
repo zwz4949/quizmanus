@@ -201,16 +201,6 @@ def statistic():
             cnt[key]+=item['eval_res'][key]
     for key in cnt:
         print(key,cnt[key]/len(eval_res))
-
-
-if __name__ == "__main__":
-    try:
-        run()
-        # test()
-        # statistic()
-        from pymilvus import connections
-        connections.disconnect_all()
-        print("程序正常结束，已断开所有数据库连接")
-    except Exception as e:
-        print(f"程序执行出错: {e}")
-
+run()
+# test()
+# statistic()

@@ -24,7 +24,7 @@ from ..MinerU.core.processor import MinerUProcessor
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # 将日志级别从INFO改为DEBUG
+logger.setLevel(logging.DEBUG)   
 
 # 创建MinerU处理器实例
 miner_processor = MinerUProcessor()

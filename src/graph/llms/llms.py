@@ -84,10 +84,6 @@ def get_llm_by_type(type,model = None,tokenizer = None):
             base_url=openai_api_base,
             temperature=0.7,
             max_retries=3,
-            # 添加以下配置以支持工具调用
-            model_kwargs={
-                "tools": None  # 设置为None表示不使用工具，避免自动添加工具定义
-            }
         )
     elif type == "ollama":
         # 初始化 Ollama（默认连接本地 http://localhost:11434）
