@@ -80,12 +80,10 @@ def get_llm_by_type(type,model = None,tokenizer = None):
     if type == "openai":
         llm = ChatOpenAI(
             model=openai_model,
-            api_key=openai_api_key,  # 替换为你的实际API密钥
-            base_url=openai_api_base,  # 默认是OpenAI官方，可改为自建服务地址
+            api_key=openai_api_key,
+            base_url=openai_api_base,
             temperature=0.7,
-            max_retries = 3
-            # max_tokens = 12280,
-            # max_completion_tokens = None
+            max_retries=3,
         )
     elif type == "ollama":
         # 初始化 Ollama（默认连接本地 http://localhost:11434）

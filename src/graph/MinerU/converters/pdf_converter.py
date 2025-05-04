@@ -107,18 +107,20 @@ def process_pdf_to_structured(pdf_path: str, remain_image: bool = False) -> Dict
     
     try:
         # 处理PDF文件并转换为Markdown
-        md_path = process_pdf(pdf_path, remain_image=remain_image)
-        logger.info(f"PDF转换为Markdown: {md_path}")
+        # md_path = process_pdf(pdf_path, remain_image=remain_image)
+        # logger.info(f"PDF转换为Markdown: {md_path}")
         
         # 移除图片行
-        remove_jpg_lines(md_path)
+        # remove_jpg_lines(md_path)
         
         # 解析Markdown文件
-        parsed_data = parse_md(md_path)
+        # parsed_data = parse_md(md_path)
         
         # 生成处理后的内容
-        processed_content = "\n\n".join([f"# {item['title']}\n{item['content']}" for item in parsed_data])
-        
+        # processed_content = "\n\n".join([f"# {item['title']}\n{item['content']}" for item in parsed_data])
+        with open('/hpc2hdd/home/fye374/LJJ/quizmanus/PDF_context.txt','r+') as F:
+            processed_content = F.read()
+        parsed_data = processed_content
         # 返回处理结果
         result = {
             "type": "pdf",

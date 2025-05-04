@@ -191,7 +191,7 @@ def rag_retrieve(state: State):
                 goto = "reranker"
         )
     else:
-        col = get_collection(DB_URI, COLLECTION_NAME)  # 这里保留原始数据库URI
+        col = get_collection(DB_URI, COLLECTION_NAME)   
         hybrid_results = hybrid_search(
             col,
             query_embeddings["dense"][0],
@@ -215,6 +215,7 @@ def rag_retrieve(state: State):
         )
 
 
+
 def rag_reranker(state: State):
     reranked_docs = rerank(
         query_text = state["rag"]['hyde_query'], 
@@ -227,9 +228,9 @@ def rag_reranker(state: State):
         'outer_knowledge':""
     }
     if state["rag"]['enable_browser']:
-        ##
-
-        # for i in range(3):
+        # 初始化response_content变量，防止异常时未定义
+        response_content = "未获取到响应内容"
+        
         try: 
             message_state = {
                 "messages":[
@@ -239,7 +240,12 @@ def rag_reranker(state: State):
             result = knowledge_based_browser.invoke(message_state)
             logger.info("Browser agent completed task")
             response_content = result["messages"][-1].content
-            outer_knowledge = get_json_result(response_content)['课外知识']
+            try:
+                outer_knowledge = get_json_result(response_content)['课外知识']
+            except Exception as json_err:
+                logger.warning(f"解析JSON失败: {json_err}，使用原始响应")
+                outer_knowledge = response_content
+            
             updated_rag = {
                 **updated_rag, 
                 "outer_knowledge": outer_knowledge
@@ -251,11 +257,8 @@ def rag_reranker(state: State):
                 **updated_rag, 
                 "outer_knowledge": outer_knowledge
             }
-                # return Command(goto="__end__")
-        # 尝试修复可能的JSON输出
-        # response_content = repair_json_output(response_content)
-        # logger.debug(f"Browser agent response: {response_content}")
-        print(f"Browser agent response: {outer_knowledge}")
+        
+        print(f"Browser agent response: {updated_rag.get('outer_knowledge', '无响应')}")
 
     return Command(
         update = {
@@ -263,6 +266,7 @@ def rag_reranker(state: State):
         },
         goto = "generator"
     )
+
 
 
 # 6. 生成组件
@@ -278,7 +282,6 @@ def rag_generator(state: State):
         context = "\n\n".join(
             state["rag"]["reranked_docs"]
         )
-    print(context)
     
     if generator_model == "qwen":
         SYSTEM_PROMPT = '''# 角色说明
