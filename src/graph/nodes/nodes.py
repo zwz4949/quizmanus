@@ -210,16 +210,49 @@ def main_supervisor(state: State) -> Command[Literal[*TEAM_MEMBERS, "__end__"]]:
 def main_browser_generator(state: State) -> Command[Literal["supervisor"]]:
     """Node for the browser agent that performs web browsing tasks."""
     logger.info("Browser agent starting task")
+    
+    # 调试信息：打印state中的关键信息
+    print("="*50)
+    print("调试信息 - Browser Generator 输入:")
+    print(f"State包含的键: {list(state.keys())}")
+    print(f"Next work内容: {state.get('next_work', '无')}")
+    if 'messages' in state:
+        print(f"消息数量: {len(state['messages'])}")
+        for i, msg in enumerate(state['messages']):
+            if hasattr(msg, 'name') and hasattr(msg, 'content'):
+                print(f"消息 {i} - 名称: {msg.name}, 内容前50个字符: {msg.content[:50]}...")
+    print("="*50)
+    
     for i in range(3):
         try: 
+            print(f"尝试调用browser_generator，第{i+1}次")
             result = browser_generator.invoke(state)
             logger.info("Browser agent completed task")
             response_content = result["messages"][-1].content
+            
+            # 调试信息：打印输出内容
+            print("="*50)
+            print("调试信息 - Browser Generator 输出:")
+            print(f"输出内容前200个字符: {response_content[:200]}...")
+            print("="*50)
+            
             break
         except Exception as e:
             logger.error(f"Browser agent failed with error: {e}")
+            
+            # 调试信息：打印详细错误
+            import traceback
+            print("="*50)
+            print("调试信息 - Browser Generator 错误:")
+            print(f"错误类型: {type(e).__name__}")
+            print(f"错误信息: {str(e)}")
+            print("详细错误信息:")
+            print(traceback.format_exc())
+            print("="*50)
+            
             response_content = ""
             return Command(goto="__end__")
+    
     # 尝试修复可能的JSON输出
     # response_content = repair_json_output(response_content)
     # logger.debug(f"Browser agent response: {response_content}")
