@@ -183,7 +183,10 @@ def main_supervisor(state: State) -> Command[Literal[*TEAM_MEMBERS, "__end__"]]:
         goto = "__end__"
         
         with open(state['quiz_url'], "w", encoding="utf-8") as f:
-            f.write(reports[-1])
+            if reports and len(reports) > 0:
+                f.write(reports[-1])
+            else:
+                f.write("没有生成报告内容")   
         logger.info("Workflow completed")
     else:
         logger.info(f"Supervisor delegating to: {goto}")

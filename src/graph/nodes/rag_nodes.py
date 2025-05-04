@@ -36,10 +36,11 @@ def rag_hyde(state: State):
     messages = [
         SystemMessage(
             content='''
-            [角色] 查询的假设性文档生成器
-            [任务] 用自身知识对当前查询进行改写，改写成和查询相关的课本知识，文档要为陈述句，不要直接生成题目。
-            再次强调，不要直接生成题目！！！
-            严格返回以下 JSON 格式：
+            [角色] 教育内容改写专家
+            [任务] 请将用户的查询改写为更详细的教育内容描述，使用陈述句形式表达。
+            请以客观、教育性的方式改写内容，避免生成题目形式。
+            
+            请严格按以下JSON格式返回结果：
             {
                 "hyde_query": "改写后的查询内容"
             }
@@ -48,27 +49,54 @@ def rag_hyde(state: State):
         HumanMessage(content=f'''当前查询：{state["next_work"]}''')
     ]
     
-    # for i in range(3):
-    # 4. 调用模型（假设 ollama.generate 返回原始文本）
-    rewrite_res = get_llm_by_type(type = llm_type).invoke(messages).content
-    # 5. 用 JsonOutputParser 解析结果
     try:
-        parsed_output = parser.parse(rewrite_res)
-        print("hyde",parsed_output)
+        # 尝试使用主要模型
+        rewrite_res = get_llm_by_type(type = llm_type).invoke(messages).content
+        # 5. 用 JsonOutputParser 解析结果
+        try:
+            parsed_output = parser.parse(rewrite_res)
+            print("hyde",parsed_output)
+            updated_rag = {
+                **state['rag'],
+                "hyde_query": parsed_output["hyde_query"]
+            }
+            return Command(
+                update = {
+                    "rag":updated_rag
+                    
+                },
+                goto = "router"
+            )
+        except Exception as e:
+            # 如果解析失败，使用原始查询
+            print(f"解析失败: {e}")
+            updated_rag = {
+                **state['rag'],
+                "hyde_query": state["next_work"]  # 使用原始查询作为备用
+            }
+            return Command(
+                update = {
+                    "rag":updated_rag
+                },
+                goto = "router"
+            )
+    except Exception as e:
+        # 如果API调用失败，尝试使用备用模型或直接使用原始查询
+        print(f"API调用失败: {e}")
+        # 使用原始查询作为备用
         updated_rag = {
             **state['rag'],
-            "hyde_query": parsed_output["hyde_query"]
+            "hyde_query": state["next_work"]
         }
         return Command(
             update = {
                 "rag":updated_rag
-                
             },
             goto = "router"
         )
     except Exception as e:
         # 如果解析失败，返回原始查询或抛出错误
-        print(f"第{i+1}次尝试：res: {rewrite_res} error: {e}")
+        print(f"第{i+1}次尝试:res: {rewrite_res} error: {e}")
     
     return Command(
         goto = "__end__"
