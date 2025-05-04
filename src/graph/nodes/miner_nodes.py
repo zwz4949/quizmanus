@@ -20,7 +20,7 @@ from langgraph.types import Command
 from .quiz_types import State
 
 # 导入MinerU处理器
-from ..MinerU.core.processor import MinerUProcessor
+from ...MinerU.core.processor import MinerUProcessor
 
 import logging
 logger = logging.getLogger(__name__)
