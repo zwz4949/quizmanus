@@ -98,6 +98,48 @@ def add_data(col, data,docs_embeddings):
         return
     print(f"添加成功")
     
+
+def slice_document_by_heading(context):
+    """
+    根据单个#标题格式切片文档
+    支持以下格式:
+    1. "#" 开头的标题 (如 "# 标题")
+    """
+    import os
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "original_context.txt")
+    
+    try:
+        with open(log_file, 'w', encoding='utf-8') as f:
+            f.write(context)
+        print(f"原始内容已保存到: {log_file}")
+    except Exception as e:
+        print(f"保存原始内容时出错: {e}")
+        
+    # 预处理：去除每行开头的空白字符
+    lines = context.split('\n')
+    cleaned_lines = [line.strip() for line in lines]
+    context = '\n'.join(cleaned_lines)
+    
+    # 确保文档以换行符开始和结束，便于匹配
+    context = "\n" + context.strip() + "\n"
+    
+    # 匹配单个#开头的标题格式
+    pattern = r'(?:\n)(# .+?)(?:\n)(.+?)(?=\n# .+?|\Z)'
+    matches = re.findall(pattern, context, re.DOTALL)
+    
+    
+    documents = []
+    for match in matches:
+        title = match[0].strip()
+        content = match[1].strip()
+        # 过滤掉过短的内容
+        if len(content) > 20:  # 可以调整最小内容长度
+            documents.append(f"{title}\n{content}")
+    
+    return documents
+
 def get_collection_minerU(context, uri, embedding_model, 
                             col_name="user_docs", 
                             chunk_size=800, 
@@ -127,7 +169,7 @@ def get_collection_minerU(context, uri, embedding_model,
     import time
     from concurrent.futures import ThreadPoolExecutor
     import numpy as np
-    from scipy.sparse import vstack
+    from scipy.sparse import vstack, csr_matrix
     
     start_time = time.time()
     
@@ -209,11 +251,8 @@ def get_collection_minerU(context, uri, embedding_model,
         for i in tqdm(range(0, len(documents), batch_size), desc="批量插入数据"):
             end_idx = min(i + batch_size, len(documents))
             
-            # 准备批量数据
-            titles = []
-            contents = []
-            sparse_vectors = []
-            dense_vectors = []
+            # 准备批量数据 - 使用实体列表格式，与add_data函数保持一致
+            batch_data = []
             
             for j in range(i, end_idx):
                 # 从文档中提取标题和内容
@@ -221,20 +260,16 @@ def get_collection_minerU(context, uri, embedding_model,
                 title = doc_parts[0].replace('# ', '') if len(doc_parts) > 0 else "无标题"
                 content = doc_parts[1] if len(doc_parts) > 1 else documents[j]
                 
-                titles.append(title)
-                contents.append(content)
-                sparse_vectors.append(docs_embeddings["sparse"]._getrow(j).todok())
-                dense_vectors.append(docs_embeddings["dense"][j])
-            
-            # 构建批量插入数据
-            batch_data = [
-                [None] * len(titles),  # subject 字段，全部为 None
-                [None] * len(titles),  # grade 字段，全部为 None
-                titles,                # title 字段
-                contents,              # content 字段
-                sparse_vectors,        # sparse_vector 字段
-                dense_vectors          # dense_vector 字段
-            ]
+                # 构建数据字典 - 与add_data函数相同的格式
+                data_item = {
+                    "subject": "",  # 空字符串代替None
+                    "grade": "",    # 空字符串代替None
+                    "title": title,
+                    "content": content,
+                    "sparse_vector": docs_embeddings["sparse"]._getrow(j).todok(),  # 与add_data相同
+                    "dense_vector": docs_embeddings["dense"][j]
+                }
+                batch_data.append(data_item)
             
             # 批量插入
             col.insert(batch_data)
@@ -266,36 +301,3 @@ def get_collection_minerU(context, uri, embedding_model,
     print(f"总处理时间: {total_time:.2f} 秒")
     
     return col
-
-def slice_document_by_heading(context):
-    """
-    根据单个#标题格式切片文档
-    支持以下格式:
-    1. "#" 开头的标题 (如 "# 标题")
-    """
-    # 预处理：去除每行开头的空白字符
-    lines = context.split('\n')
-    cleaned_lines = [line.strip() for line in lines]
-    context = '\n'.join(cleaned_lines)
-    
-    # 确保文档以换行符开始和结束，便于匹配
-    context = "\n" + context.strip() + "\n"
-    
-    # 匹配单个#开头的标题格式
-    pattern = r'(?:\n)(# .+?)(?:\n)(.+?)(?=\n# .+?|\Z)'
-    matches = re.findall(pattern, context, re.DOTALL)
-    
-    # 如果没有匹配到任何标题，尝试按段落切分
-    if not matches:
-        print("未找到标题匹配，将按段落切分")
-        return slice_by_paragraphs(context, max_length=800)
-    
-    documents = []
-    for match in matches:
-        title = match[0].strip()
-        content = match[1].strip()
-        # 过滤掉过短的内容
-        if len(content) > 20:  # 可以调整最小内容长度
-            documents.append(f"{title}\n{content}")
-    
-    return documents

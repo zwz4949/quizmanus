@@ -4,6 +4,7 @@ import sys
 from ..utils import get_absolute_file_paths
 COLLECTION_NAME = "subjects"
 DB_URI = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src/RAG/vector_store/subjects.db" 
+TEMP_DB_URI = "/hpc2hdd/home/fye374/LJJ/quizmanus/src/RAG/vector_store/user.db"  # 内存数据库
 
 # from ..RAG.vector_store_utils import get_collection
 # col = get_collection(DB_URI,COLLECTION_NAME)

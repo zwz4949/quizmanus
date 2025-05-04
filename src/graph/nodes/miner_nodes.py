@@ -24,7 +24,7 @@ from ..MinerU.core.processor import MinerUProcessor
 
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)  # 将日志级别从INFO改为DEBUG
 
 # 创建MinerU处理器实例
 miner_processor = MinerUProcessor()
@@ -44,12 +44,10 @@ def miner_router(state: State) -> Command[Literal["pdf_processor", "image_proces
 
     # 检查是否有自定义知识库
     custom_kb = state.get("custom_knowledge_base", None)
-    print(f"heello:{custom_kb}")
     if custom_kb:
         kb_type = custom_kb.get("type")
         if kb_type == "pdf":
             logger.info("检测到PDF自定义知识库")
-            print("heello 检测到PDF自定义知识库")
             return Command(goto="pdf_processor")
         elif kb_type == "image":
             logger.info("检测到图片自定义知识库")
@@ -74,14 +72,15 @@ def pdf_processor(state: State) -> Command[Literal["coordinator"]]:
     """
     logger.info("MinerU PDF处理器启动")
     pdf_path = state["custom_knowledge_base"]['path']
-    print(f'State: pdf_processor')
+    print(f'State: pdf_processor: {pdf_path}')
 
     try:
+        embedding_model=state["rag"]["embedding_model"]
         # 使用MinerU处理器处理PDF
-        result = miner_processor.process_custom_kb({"type": "pdf", "path": pdf_path})
+        result = miner_processor.process_custom_kb({"type": "pdf", "path": pdf_path},embedding_model)
         
         logger.info("PDF处理成功完成")
-        
+
         return Command(
             update={
                 "ori_query": f"以下是从PDF文件提取的内容，请基于这些内容生成题目：\n\n{result['processed_content']}",

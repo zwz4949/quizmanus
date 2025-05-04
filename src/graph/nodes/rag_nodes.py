@@ -16,7 +16,7 @@ from ..llms.llms import get_llm_by_type
 
 from ..agents.agents import knowledge_based_browser
 
-from ...config.rag import DB_URI, COLLECTION_NAME, SUBJECTS
+from ...config.rag import DB_URI, COLLECTION_NAME, SUBJECTS,TEMP_DB_URI
 from ...RAG.vector_store_utils import get_collection,get_collection_minerU
 from ...RAG.retrieval import hybrid_search
 from ...RAG.reranker import rerank
@@ -25,6 +25,8 @@ from ...config.llms import llm_type,generator_model
 from ...config.nodes import QUESTION_TYPES
 from ...utils import get_json_result
 import logging
+
+# 导入临时数据库URI
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -150,16 +152,21 @@ def rag_retrieve(state: State):
         kb_type = custom_kb.get("type", "unknown")
         
         if kb_type == "pdf":
-            # 使用处理后的PDF内容作为检索结果
-            processed_content = custom_kb.get("processed_content", "")
-            # 创建集合并插入数据
-            col = get_collection_minerU(
-                context=processed_content,
-                uri=DB_URI,
-                embedding_model=state["rag"]['embedding_model'],
-                text_max_length=4096,  # 增加文本长度限制
-                batch_size=100         # 增加批处理大小
-            )
+            # 检查是否已有处理好的集合
+            if "collection" in custom_kb:
+                # 直接使用已处理好的集合
+                col = custom_kb["collection"]
+                logger.info("使用已处理好的向量集合")
+            else:
+                processed_content = custom_kb.get("processed_content", "")
+                # 创建集合并插入数据
+                col = get_collection_minerU(
+                    context=processed_content,
+                    uri=TEMP_DB_URI,  # 使用临时数据库URI
+                    embedding_model=state["rag"]['embedding_model'],
+                    text_max_length=4096,
+                    batch_size=100
+                )
  
             hybrid_results = hybrid_search(
                 col,
@@ -175,7 +182,7 @@ def rag_retrieve(state: State):
                 "retrieved_docs": hybrid_results
             }
     else:
-        col = get_collection(DB_URI,COLLECTION_NAME)
+        col = get_collection(DB_URI, COLLECTION_NAME)  # 这里保留原始数据库URI
         hybrid_results = hybrid_search(
             col,
             query_embeddings["dense"][0],
@@ -212,9 +219,9 @@ def rag_reranker(state: State):
         'outer_knowledge':""
     }
     if state["rag"]['enable_browser']:
-        ##
-
-        # for i in range(3):
+        # 初始化response_content变量，防止异常时未定义
+        response_content = "未获取到响应内容"
+        
         try: 
             message_state = {
                 "messages":[
@@ -224,7 +231,12 @@ def rag_reranker(state: State):
             result = knowledge_based_browser.invoke(message_state)
             logger.info("Browser agent completed task")
             response_content = result["messages"][-1].content
-            outer_knowledge = get_json_result(response_content)['课外知识']
+            try:
+                outer_knowledge = get_json_result(response_content)['课外知识']
+            except Exception as json_err:
+                logger.warning(f"解析JSON失败: {json_err}，使用原始响应")
+                outer_knowledge = response_content
+            
             updated_rag = {
                 **updated_rag, 
                 "outer_knowledge": outer_knowledge
@@ -236,11 +248,8 @@ def rag_reranker(state: State):
                 **updated_rag, 
                 "outer_knowledge": outer_knowledge
             }
-                # return Command(goto="__end__")
-        # 尝试修复可能的JSON输出
-        # response_content = repair_json_output(response_content)
-        # logger.debug(f"Browser agent response: {response_content}")
-        print(f"Browser agent response: {outer_knowledge}")
+        
+        print(f"Browser agent response: {updated_rag.get('outer_knowledge', '无响应')}")
 
     return Command(
         update = {

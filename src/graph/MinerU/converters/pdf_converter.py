@@ -124,15 +124,21 @@ def process_pdf_to_structured(pdf_path: str, remain_image: bool = False) -> Dict
             "type": "pdf",
             "path": pdf_path,
             "processed_data": parsed_data,
-            "processed_content": processed_content
+            "processed_content": processed_content,
+            "collection_id": os.path.basename(os.path.splitext(pdf_path)[0])  # 只使用文件名，不包含扩展名
         }
-        
         logger.info("PDF处理成功完成")
         return result
         
     except Exception as e:
         logger.error(f"处理PDF文件时出错: {e}")
-        raise
+        return {
+            "type": "pdf",
+            "path": pdf_path,
+            "error": f"处理PDF文件时出错: {str(e)}",
+            "processed_content": f"[PDF内容处理失败: {pdf_path}]",
+            "collection_id": os.path.basename(pdf_path)
+        }
 
 
 def batch_process_pdfs(subject_dirs: list) -> None:
