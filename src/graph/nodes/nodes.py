@@ -149,7 +149,7 @@ def main_supervisor(state: State) -> Command[Literal[*TEAM_MEMBERS, "__end__"]]:
             message.content = RESPONSE_FORMAT.format(message.name, message.content)
     for i in range(3):
         try:
-            if len(messages)>9:
+            if len(messages)>119:
                 dict_messages = messages_to_dict(messages)
                 role_mapping = {
                     "system": "system",

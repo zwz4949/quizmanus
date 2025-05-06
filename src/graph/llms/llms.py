@@ -2,7 +2,7 @@
 from openai import OpenAI
 import ollama
 import sys
-from ...config.llms import openai_model, openai_api_key, openai_api_base, ollama_model
+from ...config.llms import openai_model, openai_api_key, openai_api_base, ollama_model, ollama_num_ctx
 
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
@@ -38,23 +38,23 @@ def call_api(prompt, model):
         print(f"An error occurred: {e}")
         return ""
 
-def get_llm_response(prompt, model, model_type = "ollama", options={"format": "json","num_ctx": 8192,"device": "cuda:0"}):
-    '''
-    model="qwen2.5:14b"
-    model_type = "ollama"
-    ======
-    model="gpt-4o-mini"
-    model_type = "openai"
-    '''
-    if model_type == "ollama":
-        response = ollama.generate(
-            model="qwen2.5:14b",
-            prompt=prompt,
-            options=options,  # 强制JSON输出
-        )["response"]
-    elif model_type == "openai":
-        response = call_api(prompt,model)
-    return response
+# def get_llm_response(prompt, model, model_type = "ollama", options={"format": "json","num_ctx": 8192,"device": "cuda:0"}):
+#     '''
+#     model="qwen2.5:14b"
+#     model_type = "ollama"
+#     ======
+#     model="gpt-4o-mini"
+#     model_type = "openai"
+#     '''
+#     if model_type == "ollama":
+#         response = ollama.generate(
+#             model="qwen2.5:14b",
+#             prompt=prompt,
+#             options=options,  # 强制JSON输出
+#         )["response"]
+#     elif model_type == "openai":
+#         response = call_api(prompt,model)
+#     return response
     
     
 
@@ -99,7 +99,7 @@ def get_llm_by_type(type,model = None,tokenizer = None):
         llm = ChatOllama(
             model=ollama_model,
             # match your previous options dict
-            num_ctx=25600,       # context window size
+            num_ctx=ollama_num_ctx,       # context window size
             temperature=0.7,     # randomness
             stream=False         # synchronous invoke
         )

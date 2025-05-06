@@ -11,9 +11,10 @@ from transformers import BitsAndBytesConfig
 from peft import PeftModel
 from src.utils import getData,get_json_result,saveData
 from tqdm import tqdm
-from src.config.llms import generator_model
+from src.config.llms import generator_model,qwen_model_path
 
 import numpy as np
+
 
 # 固定随机种子
 seed = 42
@@ -29,7 +30,7 @@ load_dotenv()  # 加载 .env 文件
 def run():
     graph = build_main()
     if generator_model == "qwen":
-        model_path = '/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/models/qwen2.5-14b-qlora-gaokao-1072'
+        model_path = qwen_model_path
         
 
         tokenizer = AutoTokenizer.from_pretrained(
@@ -70,16 +71,16 @@ def run():
     else:
         model = None
         tokenizer = None
-    test_file_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/test.json"
-    save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_1072"
+    test_file_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/test_qwen.json"
+    save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_5244"
     os.makedirs(save_dir, exist_ok=True)
     tmp_test = getData(test_file_path)
     for item in tmp_test:
         item['quiz_url'] = os.path.join(save_dir,f"{item['id']}.md")
     saveData(tmp_test,test_file_path)
-    for idx,file_item in tqdm(enumerate(getData(test_file_path))):
-        # if idx <5:
-        #     continue
+    for idx,file_item in enumerate(tqdm(getData(test_file_path))):
+        if idx+1 <3:
+            continue
         user_input = file_item['query']
 
         # embeddings
@@ -104,18 +105,18 @@ from evaluate import evaluate_quiz
 import json
 def test():
     print("开始evaluate")
-    evaluate_quiz(getData("/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/test.json"),"/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_1072/eval_result.jsonl")
+    evaluate_quiz(getData(test_file_path),f"{save_dir}/eval_result.jsonl")
 
 
 from collections import *
 def statistic():
     cnt = defaultdict(int)
-    eval_res = getData("/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_1072/eval_result.jsonl")
+    eval_res = getData(f"{save_dir}/eval_result.jsonl")
     for item in eval_res:
         for key in item['eval_res']:
             cnt[key]+=item['eval_res'][key]
     for key in cnt:
         print(key,cnt[key]/len(eval_res))
-# run()
-test()
-statistic()
+run()
+# test()
+# statistic()

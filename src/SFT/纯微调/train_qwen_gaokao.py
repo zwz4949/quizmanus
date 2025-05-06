@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import sys
 sys.path.append('/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src')
 from datasets import load_dataset,Dataset
@@ -27,7 +27,7 @@ set_seed(seed)
 
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 # data_root_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src/SFT/纯微调/gaokao_data"
-data_root_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src/SFT/纯微调/gaokao_data"
+data_root_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/2000题练习册/md/1.5"
 model_root_path = "/hpc2hdd/home/fye374/models/Qwen"
 module_name = "Qwen2.5-14B-Instruct"
 # model_root_path = "/hpc2hdd/home/fye374/models/deepseek-ai"
@@ -84,13 +84,6 @@ def main():
     # 初始化tokenizer并添加特殊字符
     tokenizer = AutoTokenizer.from_pretrained(os.path.join(model_root_path,module_name), trust_remote_code=True)
     
-    # Qwen tokenizer已经有一些特殊字符，但如果需要添加额外的特殊字符，可以这样做
-    # 例如添加一个新的特殊字符 <CUSTOM>
-    # special_tokens_dict = {
-    #     'additional_special_tokens': ['<question>', '<answer>', '<analysis>','<type>','<subject>']
-    # }
-    # tokenizer.add_special_tokens(special_tokens_dict)
-    
     # 确保tokenizer有正确的padding设置
     tokenizer.pad_token = tokenizer.eos_token
     compute_dtype = getattr(torch, "bfloat16")
@@ -98,7 +91,7 @@ def main():
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
         bnb_4bit_compute_dtype=compute_dtype,
-        bnb_4bit_use_double_quant=False,
+        bnb_4bit_use_double_quant=True,
     )
     # 2. 加载模型
     model = AutoModelForCausalLM.from_pretrained(
@@ -123,16 +116,17 @@ def main():
     peft_config = LoraConfig(
         lora_alpha = 16,
         lora_dropout=0.1,
-        r=64,
+        r=32,
         bias="none",
         task_type="CAUSAL_LM",
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     )
     
     # 4. 准备训练数据
     # 这里使用示例数据集，您可以替换为自己的数据集
     # data = getData(f"{data_root_path}/train.json")
     # dataset = Dataset.from_list(data)
-    dataset = load_dataset("json", data_files=f"{data_root_path}/test.json")['train']
+    dataset = load_dataset("json", data_files=f"{data_root_path}/gaokao_align.json")['train']
     print(dataset[0])
     # 5. 配置训练参数
     training_args = SFTConfig(
@@ -148,8 +142,8 @@ def main():
         # save_steps=100,
         # save_total_limit=3,
         save_strategy="epoch",
-        fp16=True,  # 使用混合精度训练
-        max_length=4096,  # 最大序列长度
+        bf16=True,  # 使用混合精度训练
+        max_length=3072,  # 最大序列长度
         # packing=True,  # 启用序列打包以提高效率
         # dataset_text_field="text",  # 数据集中文本字段的名称
         disable_tqdm= False
@@ -176,42 +170,34 @@ def main():
 
 # 自定义格式化函数，用于将数据集中的对话格式化为Qwen模型期望的格式
 def format_chat(example,tokenizer):
-    """
-    将数据集中的对话格式化为Qwen模型期望的格式
-    示例输入格式:
-    {
-        "question":"question",
-        "subject":"subject",
-        "type":"type",
-        "answer":"[answer,answer,answer]",
-        "analysis":"analysis",
-        "context":"context",
-    }
-    """
-    SYSTEM_PROMPT = '''# 角色说明
-你是一个根据课本内容和课外内容生成{type}的专家，给定一段{subject}的课本内容和一段相关的课外内容，请根据他们生成一道高考{type}。
+    # if "instruction" in example:
+    #     SYSTEM_PROMPT = '''# 角色说明
+    # 你是一个好助手，请帮我回答问题。'''
 
-# 回答格式
-题干；...
-参考答案：...
-解析：...'''
-    intro = {
-            "单选题": [
-                "单选题有四个选项ABCD，参考答案为其中一个选项",
-                "单选题有四个选项ABCD，参考答案为其中一个选项"  # 课外=False时的提示
-            ],
-            "多选题": [
-                "多选题有四个选项ABCD，参考答案为其中二到四个选项，一般答案为二或者三个选项居多",
-                "多选题有四个选项ABCD，参考答案为其中二到四个选项，一般答案为二或者三个选项居多"  # 课外=False时的提示
-            ],
-            "大题":["大题中若有多道小题，参考答案需要一道道针对性给答案，并且每题要逐步增加难度，从识记到应用，同时在思考时每小题需要给出涉及的具体课本知识点。\n政治大题和历史大题多为直接给出若干个材料，然后给出若干道需要根据材料回答的简答题，简答题答案需要涉及课本内容和结合课外内容；生物大题多为在课外内容背景下对课内知识的考查，多为填空题，也可以有简答题，填空用___下划线表示需要填空的地方；地理大题多为在课外内容背景下对课内知识的考查，答案需结合课本内容和课外内容，多为简答题","大题可以是单道小题或者是多道小题，每题要逐步增加难度，从识记到应用，并且在思考时每小题需要给出涉及的具体知识点。\n政治大题和历史大题出简答题；生物和地理大题多为填空题，也可以有简答题，填空用___下划线表示需要填空的地方"]
-        }
+    #     messages=[
+    #         {'role':'system','content':example['system']}, 
+    #         {'role':'user','content': example['instruction']}, 
+    #         {'role':'assistant','content': example['response']}
+    #     ]
+    # else:
+    #     SYSTEM_PROMPT = '''# 角色说明
+    # 你是一个根据课本内容和课外内容生成{type}的专家，给定一段{subject}的课本内容和一段相关的课外内容，请根据他们生成一道高考{type}。
+
+    # # 回答格式
+    # 题干；...
+    # 参考答案：...
+    # 解析：...'''
+
+    #     messages=[
+    #         {'role':'system','content':SYSTEM_PROMPT.format(type= example['type'],subject = example['subject'])}, 
+    #         {'role':'user','content': f"课本内容：{example['课本内容']}\n课外内容：{example['课外内容']}"}, 
+    #         {'role':'assistant','content': f'题干：{example['question']}\n\n参考答案：{example['answer']}\n\n解析：{example['analysis']}'}
+    #     ]
     messages=[
-        {'role':'system','content':SYSTEM_PROMPT.format(type= example['type'],subject = example['subject'])}, 
-        # ,type_intro = intro[example['type']][0 if example['课外'] else 1]
-        {'role':'user','content': f"课本内容：{example['课本内容']}\n课外内容：{example['课外内容']}"}, 
-        {'role':'assistant','content': f'题干：{example['question']}\n\n参考答案：{example['answer']}\n\n解析：{example['analysis']}'}
-    ]
+            {'role':'system','content':example['system']}, 
+            {'role':'user','content': example['instruction']}, 
+            {'role':'assistant','content': example['response']}
+        ]
     prompt=tokenizer.apply_chat_template(messages,tokenize=False,add_generation_prompt=False)
     
     # 如果数据集不是对话格式，直接返回文本
