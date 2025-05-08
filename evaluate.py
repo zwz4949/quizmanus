@@ -5,7 +5,8 @@ import re
 from typing import List, Dict, Union
 from tqdm import tqdm
 
-
+from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 
 
 import sys
@@ -21,6 +22,55 @@ from src.utils import (
 # from src.utils import call_Hkust_api,getData,get_json_result
 from src.config.rag import DETIALED_SUBJECTS
 from tqdm import tqdm
+
+
+from src.config.llms import eval_llm_type,eval_model,ollama_num_ctx
+
+def get_llm_by_type():
+    '''
+    # paramter:
+    type: "ollama","openai","qwen2.5-7b","qwen2.5-3b"
+    # usage:
+    from langchain_core.messages import HumanMessage, SystemMessage
+    llm = get_llm_by_type("ollama")
+    # 构建消息
+    messages = [
+        SystemMessage(content="你是一个物理学教授"),
+        HumanMessage(content="用简单的比喻解释量子隧穿效应")
+    ]
+    # 调用模型
+    response = llm.invoke(messages)
+    print("回答：", response.content)
+    '''
+    
+    if eval_llm_type == "openai":
+        llm = ChatOpenAI(
+            model=openai_model,
+            api_key=openai_api_key,  # 替换为你的实际API密钥
+            base_url=openai_api_base,  # 默认是OpenAI官方，可改为自建服务地址
+            temperature=0.7,
+            max_retries = 3
+            # max_tokens = 12280,
+            # max_completion_tokens = None
+        )
+    elif eval_llm_type == "ollama":
+        # 初始化 Ollama（默认连接本地 http://localhost:11434）
+        # llm = ChatOllama(
+        #     model=ollama_model,  # 可替换为其他本地模型如 "mistral"、"qwen" 等
+        #     temperature=0.7,
+        #     # 如果 Ollama 服务地址不是默认的，可通过 base_url 修改：
+        #     # base_url="http://your-ollama-host:11434"
+        # )
+        
+        llm = ChatOllama(
+            model=eval_model,
+            # match your previous options dict
+            num_ctx=ollama_num_ctx,       # context window size
+            temperature=0.7,     # randomness
+            stream=False         # synchronous invoke
+        )
+    return llm
+
 
 prompt_template = '''一位老师/学生提出了一个需求：{query}。因此我们创建了一套测验题，其中包含若干道题目。请利用你的自身知识以及给定的学科目录概括，根据以下标准对该测验题的质量进行评估，并为整套题目给出1到5分的评分。
 
@@ -143,7 +193,11 @@ def get_response(example,prompt_template):
         query = example['query']
         prompt = prompt_template.replace("{query}",query).replace("{aggregated_quiz}",aggregated_quiz).replace("{catalog}",catalog)
         # print(get_json_result(call_Hkust_api(prompt,remain_reasoning= True, temperature = 0.0,top_p = 1.0)))
-        eval_res_text= call_Hkust_api(prompt,remain_reasoning= False, config = {"temperature":0,"top_k":1,"do_sample":False})
+        if eval_llm_type == "hkust":
+            eval_res_text_= call_Hkust_api(prompt,remain_reasoning= False, config = {"temperature":0,"top_k":1,"do_sample":False})
+        else:
+            eval_res_text_ = get_llm_by_type().invoke([{"role":"user","content":prompt}]).content
+        eval_res_text = re.sub(r'<think>.*?</think>', '', eval_res_text_, flags=re.DOTALL).strip()
         eval_res = get_json_result(eval_res_text)
         print(eval_res_text)
         dict_ = {**example, "eval_res_text": eval_res_text, "eval_res": eval_res}

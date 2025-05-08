@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 from src.graph.builder import build_rag,build_main
 from langgraph.graph import MessagesState
 from dotenv import load_dotenv
@@ -15,6 +15,7 @@ from src.config.llms import generator_model,qwen_model_path
 
 import numpy as np
 
+from src.config.llms import eval_llm_type,eval_model
 
 # 固定随机种子
 seed = 42
@@ -25,7 +26,9 @@ torch.cuda.manual_seed_all(seed)
 
 load_dotenv()  # 加载 .env 文件
 
-
+test_file_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/test_qwen.json"
+save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_2_5_72b"
+# save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_5244"
 
 def run():
     graph = build_main()
@@ -71,16 +74,17 @@ def run():
     else:
         model = None
         tokenizer = None
-    test_file_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/test_qwen.json"
-    save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_5244"
+    
     os.makedirs(save_dir, exist_ok=True)
     tmp_test = getData(test_file_path)
     for item in tmp_test:
         item['quiz_url'] = os.path.join(save_dir,f"{item['id']}.md")
     saveData(tmp_test,test_file_path)
     for idx,file_item in enumerate(tqdm(getData(test_file_path))):
-        if idx+1 <3:
-            continue
+        # if idx+1 <3:
+        #     continue
+        # if idx+1 not in [3,7,11,12,14]:
+        #     continue
         user_input = file_item['query']
 
         # embeddings
@@ -103,20 +107,58 @@ def run():
 from evaluate import evaluate_quiz
 
 import json
+
+if eval_llm_type == "hkust":
+    tail = ""
+else:
+    tail = f"_{eval_llm_type}_{eval_model}"
 def test():
     print("开始evaluate")
-    evaluate_quiz(getData(test_file_path),f"{save_dir}/eval_result.jsonl")
+    evaluate_quiz(getData(test_file_path),f"{save_dir}/eval_result{tail}.jsonl")
 
 
 from collections import *
 def statistic():
     cnt = defaultdict(int)
-    eval_res = getData(f"{save_dir}/eval_result.jsonl")
+    eval_res = getData(f"{save_dir}/eval_result{tail}.jsonl")
     for item in eval_res:
         for key in item['eval_res']:
             cnt[key]+=item['eval_res'][key]
     for key in cnt:
         print(key,cnt[key]/len(eval_res))
-run()
+    llama3_1 = getData(f"{save_dir}/eval_result_ollama_llama3.1:70b.jsonl")
+    qwen3 = getData(f"{save_dir}/eval_result_ollama_qwen3:32b.jsonl")
+    r1 = getData(f"{save_dir}/eval_result.jsonl")
+    n = llama3_1+qwen3+r1
+    exist_n = 0
+    if len(llama3_1)>0:
+        exist_n+=1
+    if len(qwen3)>0:
+        exist_n+=1
+    if len(r1)>0:
+        exist_n+=1
+    cnt_all = defaultdict(int)
+    # print("llama")
+    for item in llama3_1:
+        for key in item['eval_res']:
+            cnt_all[key]+=item['eval_res'][key]/exist_n
+    # print("qwen3")
+    for item in qwen3:
+        for key in item['eval_res']:
+            cnt_all[key]+=item['eval_res'][key]/exist_n
+    # print("deepseek_r1")
+    for item in r1:
+        for key in item['eval_res']:
+            cnt_all[key]+=item['eval_res'][key]/exist_n
+    ave = 0
+    for key in cnt_all:
+        ave+=cnt_all[key]/len(eval_res)
+        print(key,cnt_all[key]/len(eval_res))
+    print("平均分：",ave/len(cnt_all))
+    
+        
+            
+
+# run()
 # test()
-# statistic()
+statistic()

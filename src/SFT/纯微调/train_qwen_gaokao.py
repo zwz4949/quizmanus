@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import sys
 sys.path.append('/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src')
 from datasets import load_dataset,Dataset
@@ -27,7 +27,7 @@ set_seed(seed)
 
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 # data_root_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src/SFT/纯微调/gaokao_data"
-data_root_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/2000题练习册/md/1.5"
+data_root_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src/SFT/纯微调/gaokao_data/final_data"
 model_root_path = "/hpc2hdd/home/fye374/models/Qwen"
 module_name = "Qwen2.5-14B-Instruct"
 # model_root_path = "/hpc2hdd/home/fye374/models/deepseek-ai"
@@ -83,7 +83,14 @@ def main():
     
     # 初始化tokenizer并添加特殊字符
     tokenizer = AutoTokenizer.from_pretrained(os.path.join(model_root_path,module_name), trust_remote_code=True)
-    
+    kwargs = {
+        # "trust_remote_code": True,
+        # "device_map": "auto",
+        # "torch_dtype": compute_dtype,
+    }
+    if hasattr(torch.nn.functional, 'scaled_dot_product_attention'):
+        kwargs["attn_implementation"] = "flash_attention_2"
+
     # 确保tokenizer有正确的padding设置
     tokenizer.pad_token = tokenizer.eos_token
     compute_dtype = getattr(torch, "bfloat16")
@@ -99,6 +106,7 @@ def main():
         quantization_config=quant_config,
         trust_remote_code=True,
         device_map="auto",
+        # **kwargs
     )
     
     # 调整模型以适应新的tokenizer大小
@@ -116,7 +124,7 @@ def main():
     peft_config = LoraConfig(
         lora_alpha = 16,
         lora_dropout=0.1,
-        r=32,
+        r=64,
         bias="none",
         task_type="CAUSAL_LM",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
@@ -126,7 +134,7 @@ def main():
     # 这里使用示例数据集，您可以替换为自己的数据集
     # data = getData(f"{data_root_path}/train.json")
     # dataset = Dataset.from_list(data)
-    dataset = load_dataset("json", data_files=f"{data_root_path}/gaokao_align.json")['train']
+    dataset = load_dataset("json", data_files=f"{data_root_path}/gaokao_ds_align_(课本课外)_3584.json")['train']
     print(dataset[0])
     # 5. 配置训练参数
     training_args = SFTConfig(
@@ -143,7 +151,7 @@ def main():
         # save_total_limit=3,
         save_strategy="epoch",
         bf16=True,  # 使用混合精度训练
-        max_length=3072,  # 最大序列长度
+        max_length=3584,  # 最大序列长度
         # packing=True,  # 启用序列打包以提高效率
         # dataset_text_field="text",  # 数据集中文本字段的名称
         disable_tqdm= False
