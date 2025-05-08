@@ -31,27 +31,52 @@ def main_coordinator(state: State) -> Command[Literal["planner", "__end__"]]:
     """Coordinator node that communicate with customers."""
     logger.info("Coordinator talking.")
     system_message = get_prompt_template("coordinator")
+    print(f'State: main_coordinator')
     messages = [
         SystemMessage(
             content = system_message
         ),
         HumanMessage(content=f'''当前查询：{state["ori_query"]}''')
     ]
-    response_content = get_llm_by_type(type = llm_type).invoke(messages).content
+    
+    try:
+        # 尝试获取响应
+        response = get_llm_by_type(type = llm_type).invoke(messages)
+        response_content = response.content
+        
+        # 打印原始响应内容以便调试
+        print("原始API响应:", response_content[:200])
+        
+    except json.JSONDecodeError as e:
+        # 捕获JSON解析错误
+        print(f"JSON解析错误: {e}")
+        print(f"尝试修复JSON响应...")
+        
+        # 尝试提取有效的JSON部分
+        import re
+        json_pattern = r'(\{.*\})'
+        match = re.search(json_pattern, str(response))
+        if match:
+            response_content = match.group(1)
+        else:
+            response_content = "{}"
+            
+    except Exception as e:
+        print(f"调用LLM时出错: {e}")
+        response_content = "{}"
+    
     logger.debug(f"Current state messages: {state['messages']}")
-    # 尝试修复可能的JSON输出
     logger.debug(f"Coordinator response: {response_content}")
 
     goto = "__end__"
     if "handoff_to_planner" in response_content:
         goto = "planner"
 
-    # 更新response.content为修复后的内容
-    # response.content = response_content
-
     return Command(
         goto=goto,
     )
+
+
 def main_planner(state: State):
     parser = JsonOutputParser()
     def inner_router():
@@ -142,6 +167,10 @@ def main_supervisor(state: State) -> Command[Literal[*TEAM_MEMBERS, "__end__"]]:
     # preprocess messages to make supervisor execute better.
     messages = deepcopy(messages)
     reports = []
+    print("="*50)
+    print("Supervisor 原始输出:")
+    print(messages)
+    print("="*50)
     for message in messages:
         if isinstance(message, BaseMessage) and message.name in TEAM_MEMBERS:
             if message.name == "reporter":
@@ -182,7 +211,10 @@ def main_supervisor(state: State) -> Command[Literal[*TEAM_MEMBERS, "__end__"]]:
         goto = "__end__"
         
         with open(state['quiz_url'], "w", encoding="utf-8") as f:
-            f.write(reports[-1])
+            if reports and len(reports) > 0:
+                f.write(reports[-1])
+            else:
+                f.write("没有生成报告内容")   
         logger.info("Workflow completed")
     else:
         logger.info(f"Supervisor delegating to: {goto}")
@@ -206,16 +238,49 @@ def main_supervisor(state: State) -> Command[Literal[*TEAM_MEMBERS, "__end__"]]:
 def main_browser_generator(state: State) -> Command[Literal["supervisor"]]:
     """Node for the browser agent that performs web browsing tasks."""
     logger.info("Browser agent starting task")
+    
+    # 调试信息：打印state中的关键信息
+    print("="*50)
+    print("调试信息 - Browser Generator 输入:")
+    print(f"State包含的键: {list(state.keys())}")
+    print(f"Next work内容: {state.get('next_work', '无')}")
+    if 'messages' in state:
+        print(f"消息数量: {len(state['messages'])}")
+        for i, msg in enumerate(state['messages']):
+            if hasattr(msg, 'name') and hasattr(msg, 'content'):
+                print(f"消息 {i} - 名称: {msg.name}, 内容前50个字符: {msg.content[:50]}...")
+    print("="*50)
+    
     for i in range(3):
         try: 
+            print(f"尝试调用browser_generator，第{i+1}次")
             result = browser_generator.invoke(state)
             logger.info("Browser agent completed task")
             response_content = result["messages"][-1].content
+            
+            # 调试信息：打印输出内容
+            print("="*50)
+            print("调试信息 - Browser Generator 输出:")
+            print(f"输出内容前200个字符: {response_content[:200]}...")
+            print("="*50)
+            
             break
         except Exception as e:
             logger.error(f"Browser agent failed with error: {e}")
+            
+            # 调试信息：打印详细错误
+            import traceback
+            print("="*50)
+            print("调试信息 - Browser Generator 错误:")
+            print(f"错误类型: {type(e).__name__}")
+            print(f"错误信息: {str(e)}")
+            print("详细错误信息:")
+            print(traceback.format_exc())
+            print("="*50)
+            
             response_content = ""
             return Command(goto="__end__")
+    
     # 尝试修复可能的JSON输出
     # response_content = repair_json_output(response_content)
     # logger.debug(f"Browser agent response: {response_content}")

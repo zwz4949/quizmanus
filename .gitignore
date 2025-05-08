@@ -2,7 +2,8 @@
 dataset/
 quiz_results/
 PDF/
-
+logs/
+src/RAG/vector_store/
 
 # Python 相关
 __pycache__/

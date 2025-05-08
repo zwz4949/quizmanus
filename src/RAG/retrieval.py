@@ -81,14 +81,14 @@ def hybrid_search(
     sparse_weight=1.0,
     dense_weight=1.0,
     limit=10,
-):
+):  
     dense_search_params = {"metric_type": "IP", "params": {}}
     dense_req = AnnSearchRequest(
         [query_dense_embedding], 
         "dense_vector", 
         dense_search_params, 
         limit=limit,
-        expr=f'subject == "{subject_value}"' if subject_value else None,  # 添加过滤条件
+        # expr=f'subject == "{subject_value}"' if subject_value else None,  # 添加过滤条件
     )
     sparse_search_params = {"metric_type": "IP", "params": {}}
     sparse_req = AnnSearchRequest(
@@ -96,7 +96,7 @@ def hybrid_search(
         "sparse_vector", 
         sparse_search_params, 
         limit=limit,
-        expr=f'subject == "{subject_value}"' if subject_value else None  # 添加过滤条件
+        # expr=f'subject == "{subject_value}"' if subject_value else None  # 添加过滤条件
     )
     rerank = WeightedRanker(sparse_weight, dense_weight)
     res = col.hybrid_search(

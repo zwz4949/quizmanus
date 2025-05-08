@@ -28,6 +28,8 @@ def build_main():
     builder = StateGraph(State)
     # 修改入口点，先经过miner_router判断
     builder.add_edge(START, "miner_router")
+    # builder.add_edge(START, "coordinator")
+
     # 添加MinerU相关节点
     builder.add_node("miner_router", miner_router)
     builder.add_node("pdf_processor", pdf_processor)
@@ -43,10 +45,10 @@ def build_main():
     builder.add_node("rag_and_browser", main_rag_browser)
     
     # 添加从处理器到coordinator的边
-    builder.add_edge("pdf_processor", "coordinator")
-    builder.add_edge("image_processor", "coordinator")
-    builder.add_edge("ppt_processor", "coordinator")
-    builder.add_edge("miner_router", "coordinator")
+    # builder.add_edge("pdf_processor", "coordinator")
+    # builder.add_edge("image_processor", "coordinator")
+    # builder.add_edge("ppt_processor", "coordinator")
+    # builder.add_edge("miner_router", "coordinator")
     
     return builder.compile()
 

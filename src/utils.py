@@ -81,6 +81,18 @@ def getHkustClient(api_type = "DeepSeek-R1-671B"):
 
 def call_Hkust_api(prompt, messages = [],remain_reasoning = False, api_type = "DeepSeek-R1-671B",config = {"temperature":0.7}):
     try:
+        # 调试输入参数
+        print("="*50)
+        print("调试信息 - call_Hkust_api 输入:")
+        print(f"Prompt: {prompt[:100]}..." if len(prompt) > 100 else f"Prompt: {prompt}")
+        print(f"Messages 数量: {len(messages)}")
+        for i, msg in enumerate(messages[:3]):  # 只打印前3条消息
+            print(f"消息 {i}: role={msg.get('role', 'unknown')}, content前50个字符: {msg.get('content', '')[:50]}...")
+        print(f"remain_reasoning: {remain_reasoning}")
+        print(f"api_type: {api_type}")
+        print(f"config: {config}")
+        print("="*50)
+        
         url = ALL_KEYS.hkust_openai_base_url
         headers = { 
         "Content-Type": "application/json", 
@@ -91,13 +103,49 @@ def call_Hkust_api(prompt, messages = [],remain_reasoning = False, api_type = "D
         "messages": [{"role": "user", "content": prompt}] if messages ==[] else messages, 
         **config
         }
+        
+        # 打印请求数据
+        print("请求URL:", url)
+        print("请求头:", {k: v[:10]+"..." if k == "Authorization" and len(v) > 10 else v for k, v in headers.items()})
+        print("请求数据:", {
+            "model": data["model"],
+            "messages_count": len(data["messages"]),
+            "config": {k: v for k, v in data.items() if k != "messages" and k != "model"}
+        })
+        
         response = requests.post(url, headers=headers, data=json.dumps(data))
+        
+        # 打印响应状态和头信息
+        print("="*50)
+        print("调试信息 - call_Hkust_api 响应:")
+        print(f"状态码: {response.status_code}")
+        print(f"响应头: {dict(response.headers)}")
+        
+        # 检查响应是否成功
+        if response.status_code != 200:
+            print(f"错误响应: {response.text}")
+            return ""
+            
+        # 解析响应内容
+        response_json = response.json()
+        print(f"响应JSON结构: {list(response_json.keys())}")
+        
+        result = ""
         if remain_reasoning:
-            return response.json()['choices'][0]['message']['content']
+            result = response_json['choices'][0]['message']['content']
         else:
-            return re.sub(r'<think>.*?</think>', '', response.json()['choices'][0]['message']['content'], flags=re.DOTALL).strip()
+            result = re.sub(r'<think>.*?</think>', '', response_json['choices'][0]['message']['content'], flags=re.DOTALL).strip()
+        
+        # 打印结果
+        print(f"结果前200个字符: {result[:200]}...")
+        print("="*50)
+        
+        return result
     except Exception as e:
         print(f"An error occurred: {e}")
+        import traceback
+        print("详细错误信息:")
+        print(traceback.format_exc())
         return ""
 
 def getClient(api_type = "gpt-4o-mini")->OpenAI:
