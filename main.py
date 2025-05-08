@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 from src.graph.builder import build_rag,build_main
 from langgraph.graph import MessagesState
 from dotenv import load_dotenv
@@ -159,6 +159,6 @@ def statistic():
         
             
 
-# run()
+run()
 # test()
-statistic()
+# statistic()
