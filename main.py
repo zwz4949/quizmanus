@@ -1,21 +1,28 @@
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['VLLM_ATTENTION_BACKEND'] = 'FLASHINFER'
+os.environ['VLLM_USE_FLASHINFER_SAMPLER'] = '1'
+# os.environ["TORCH_CUDA_ARCH_LIST"] = "8.0"
+
+from vllm import LLM, SamplingParams
 from src.graph.builder import build_rag,build_main
 from langgraph.graph import MessagesState
 from dotenv import load_dotenv
 from src.graph.nodes.quiz_types import embeddings, reranker
-from modelscope import AutoModelForCausalLM, AutoTokenizer
+# from modelscope import AutoModelForCausalLM, AutoTokenizer
 import os
 import torch
 from transformers import BitsAndBytesConfig
 from peft import PeftModel
 from src.utils import getData,get_json_result,saveData
 from tqdm import tqdm
-from src.config.llms import generator_model,qwen_model_path
+from src.config.llms import generator_model,qwen_model_path,qwen_tokenizer_path
 
 import numpy as np
 
 from src.config.llms import eval_llm_type,eval_model
+import torch
+from transformers import AutoTokenizer
 
 # 固定随机种子
 seed = 42
@@ -34,43 +41,30 @@ def run():
     graph = build_main()
     if generator_model == "qwen":
         model_path = qwen_model_path
-        
 
+        # 1. Tokenizer 保持不变，左填充 + EOS 作为 pad
         tokenizer = AutoTokenizer.from_pretrained(
-            model_path, 
+            qwen_tokenizer_path,
             trust_remote_code=True,
             use_fast=True,
-            padding_side='left'  # 新增参数，指定左填充
+            padding_side="left",
         )
         tokenizer.pad_token = tokenizer.eos_token
 
-        # 2. 使用更高效的模型加载方式
-        compute_dtype = torch.float16
-
-        # 3. 启用Flash Attention (如果模型支持)
-        kwargs = {
-            "trust_remote_code": True,
-            "device_map": "auto",
-            # "torch_dtype": compute_dtype,
-        }
-
-        # 检查是否支持Flash Attention
-        # if hasattr(torch.nn.functional, 'scaled_dot_product_attention'):
-        #     kwargs["attn_implementation"] = "flash_attention_2"
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            **kwargs
+        # 2. vLLM LLM 对象
+        compute_dtype = torch.bfloat16
+        model = LLM(
+            model='/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/models/qwen2.5-14b-qlora-gaokao-8271',
+            tensor_parallel_size=1,
+            trust_remote_code=True,
+            load_format="auto",
+            gpu_memory_utilization=0.3,
+            max_model_len=4096,
+            max_num_seqs=16,
+            enforce_eager=True
+            # gpu_memory_utilization = 0.25
         )
-
-        # 4. 调整模型以适应新的tokenizer大小
-        model.resize_token_embeddings(len(tokenizer))
-
-        # 6. 编译模型 (PyTorch 2.0+特性)
-        if hasattr(torch, 'compile'):
-            model = torch.compile(model, mode="reduce-overhead")
-
-        # 设置为评估模式
-        model.eval()
+        pass
     else:
         model = None
         tokenizer = None
@@ -158,7 +152,8 @@ def statistic():
     
         
             
+if __name__ == '__main__':
 
-run()
-# test()
-# statistic()
+    run()
+    # test()
+    # statistic()

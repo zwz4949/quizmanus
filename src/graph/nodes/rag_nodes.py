@@ -247,7 +247,10 @@ def rag_generator(state: State):
             {'role':'user','content': f"课本内容：{context}\n课外内容：{state['rag']['outer_knowledge']}"}, 
             {'role':'assistant','content': ''}
         ]
-        final_answer = get_llm_by_type(type = "qwen",model = state['generate_model'],tokenizer =state['generate_tokenizer']).invoke(messages)
+        final_answer_ = get_llm_by_type(type = "qwen",model = state['generate_model'],tokenizer =state['generate_tokenizer']).invoke(messages)
+        ## 使用qwen会返回列表
+        if len(final_answer_) == 1:
+            final_answer = final_answer_[0]
     else:
         SYSTEM_PROMPT = '''# 角色说明
 你是一个根据课本内容和课外内容生成{type}的专家，给定一段{subject}的课本内容和一段相关的课外内容，请根据他们生成一道高考{type}。题目要完整，如果要引用材料信息就在题干包括具体的材料信息。不要在题目中包含课本内容、课内知识、课外知识等字眼，同时题目不能有根据某图片的信息，也不能包含图片。(如果没给课外内容就只用课本内容生成题目)
@@ -278,4 +281,3 @@ def rag_generator(state: State):
         },
         goto = "__end__"
     )
-

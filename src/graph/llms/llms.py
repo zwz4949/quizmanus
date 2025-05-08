@@ -2,7 +2,7 @@
 from openai import OpenAI
 import ollama
 import sys
-from ...config.llms import openai_model, openai_api_key, openai_api_base, ollama_model, ollama_num_ctx
+from ...config.llms import openai_model, openai_api_key, openai_api_base, ollama_model, ollama_num_ctx,vllm_sampling_params
 
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
@@ -37,28 +37,6 @@ def call_api(prompt, model):
     except Exception as e:
         print(f"An error occurred: {e}")
         return ""
-
-# def get_llm_response(prompt, model, model_type = "ollama", options={"format": "json","num_ctx": 8192,"device": "cuda:0"}):
-#     '''
-#     model="qwen2.5:14b"
-#     model_type = "ollama"
-#     ======
-#     model="gpt-4o-mini"
-#     model_type = "openai"
-#     '''
-#     if model_type == "ollama":
-#         response = ollama.generate(
-#             model="qwen2.5:14b",
-#             prompt=prompt,
-#             options=options,  # 强制JSON输出
-#         )["response"]
-#     elif model_type == "openai":
-#         response = call_api(prompt,model)
-#     return response
-    
-    
-
-
 
 def get_llm_by_type(type,model = None,tokenizer = None):
     '''
@@ -98,7 +76,7 @@ def get_llm_by_type(type,model = None,tokenizer = None):
         
         llm = ChatOllama(
             model=ollama_model,
-            # match your previous options dict
+            num_thread = 8,
             num_ctx=ollama_num_ctx,       # context window size
             temperature=0.7,     # randomness
             stream=False         # synchronous invoke
@@ -114,34 +92,26 @@ def get_llm_by_type(type,model = None,tokenizer = None):
                 # continue_final_message=True
             )
             return prompt.replace("\n<|im_end|>\n",'')+"\n"
-        def single_generate(x, model, tokenizer):
-            # 将模型移动到当前设备（如果尚未移动）
-            model.to(device)
-            
-            # 单条输入处理并移动到相同设备
-            inputs = tokenizer(
-                prepare_input(x, tokenizer), 
-                return_tensors="pt", 
-                padding=True,
-                truncation=True
-            ).to(device)  # 关键修改：整个inputs移动到模型所在设备
-            
-            # 单条生成
-            generated_ids = model.generate(
-                input_ids=inputs.input_ids,
-                attention_mask=inputs.attention_mask,
-                max_new_tokens=1024,
-                do_sample=True,
-                temperature=0.7,
-                top_p=0.9,
-                pad_token_id=tokenizer.pad_token_id,
-                use_cache=True,
-                repetition_penalty=1.1
-            )
-            
-            # 解码单条结果（注意移回CPU再解码）
-            completion_ids = generated_ids[0][len(inputs.input_ids[0]):].cpu()
-            return tokenizer.decode(completion_ids, skip_special_tokens=True)
+        def single_generate(x, model, tokenizer) -> list:
+            '''
+            使用vllm
+            x可以是两种格式
+            - 一种是messages = [{"role":...,"content":...}],目前用这种生成单个题目
+            - 另一种是[messages,messages...]，后续会考虑用这种生成一个batch的题目
+            ''' 
+            if len(x)>0:
+                if isinstance(x[0],dict):
+                    ## 改用vllm
+                    gen = model.generate([prepare_input(x,tokenizer)], vllm_sampling_params)
+                    result = gen[0]
+                    return [result.outputs[0].text.split("assistant")[-1].strip()]
+                elif isinstance(x[0],list):
+                    tmp_input = [prepare_input(xi,tokenizer) for xi in x]
+                    ## 改用vllm
+                    gen = model.generate(tmp_input, vllm_sampling_params)
+                    result = [geni.outputs[0].text.split("assistant")[-1].strip() for geni in gen]
+                    return result
+
         
             
         # 将模型包装为 Runnable

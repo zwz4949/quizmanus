@@ -124,7 +124,7 @@ def main_planner(state: State):
     except json.JSONDecodeError:
         logger.warning("Planner response is not a valid JSON")
         goto = "__end__"
-    print(full_response)
+    # print(full_response)
     return Command(
         update={
             "messages": [HumanMessage(content=full_response,name="planner")],
