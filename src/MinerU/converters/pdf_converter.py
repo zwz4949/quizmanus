@@ -60,7 +60,6 @@ def process_pdf(pdf_file_path: str, remain_image: bool = False) -> str:
     # 获取图片目录名
     image_dir = os.path.basename(local_image_dir)
     
-    # 确保目录存在
     os.makedirs(local_image_dir, exist_ok=True)
     os.makedirs(local_md_dir, exist_ok=True)
     
@@ -85,20 +84,21 @@ def process_pdf(pdf_file_path: str, remain_image: bool = False) -> str:
         infer_result = dataset.apply(doc_analyze, ocr=False)
         pipe_result = infer_result.pipe_txt_mode(image_writer)
     
-    # 保存为 Markdown 文件
     pipe_result.dump_md(md_writer, output_md_path, image_dir)
+    logger.info(f"PDF内容已保存到: {output_md_path}")
     
     logger.info(f"完成处理: {pdf_file_path}")
     return output_md_path
 
 
-def process_pdf_to_structured(pdf_path: str, remain_image: bool = False) -> Dict[str, Any]:
+def process_pdf_to_structured(pdf_path: str, remain_image: bool = False, save_output: bool = True) -> Dict[str, Any]:
     """
     处理PDF文件并转换为结构化数据
     
     参数:
         pdf_path (str): PDF文件路径
         remain_image (bool): 是否保留图片
+        save_output (bool): 是否保存输出文件，默认为True
         
     返回:
         Dict[str, Any]: 处理结果，包含processed_data和processed_content
@@ -107,20 +107,22 @@ def process_pdf_to_structured(pdf_path: str, remain_image: bool = False) -> Dict
     
     try:
         # 处理PDF文件并转换为Markdown
-        # md_path = process_pdf(pdf_path, remain_image=remain_image)
-        # logger.info(f"PDF转换为Markdown: {md_path}")
+        md_path = process_pdf(pdf_path, remain_image=remain_image)
+        logger.info(f"PDF转换为Markdown: {md_path}")
         
-        # 移除图片行
-        # remove_jpg_lines(md_path)
-        
+
+        remove_jpg_lines(md_path)
+            
         # 解析Markdown文件
-        # parsed_data = parse_md(md_path)
-        
+        parsed_data = parse_md(md_path)
+            
         # 生成处理后的内容
-        # processed_content = "\n\n".join([f"# {item['title']}\n{item['content']}" for item in parsed_data])
-        with open('/hpc2hdd/home/fye374/LJJ/quizmanus/PDF_context.txt','r+') as F:
-            processed_content = F.read()
-        parsed_data = processed_content
+        processed_content = "\n\n".join([f"# {item['title']}\n{item['content']}" for item in parsed_data])
+
+        if not save_output and os.path.exists(md_path):
+            os.remove(md_path)
+            logger.info(f"已删除临时Markdown文件: {md_path}")
+        
         # 返回处理结果
         result = {
             "type": "pdf",
