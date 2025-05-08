@@ -8,7 +8,7 @@ openai_api_base = ALL_KEYS.common_openai_base_url
 llm_type = "ollama" #openai ollama qwen
 
 generator_model = "qwen"
-qwen_model_path = '/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/models/qwen2.5-14b-qlora-gaokao-8271'
+qwen_model_path = '/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/models/qwen2.5-14b-qlora-gaokao-21699'
 qwen_tokenizer_path = "/hpc2hdd/home/fye374/models/Qwen/Qwen2.5-14B-Instruct"
 
 vllm_sampling_params = SamplingParams(
