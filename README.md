@@ -2,7 +2,7 @@
 
 这是一个基于Agent和RAG的智能试卷生成系统，目前支持生物、地理、政治和历史的试卷生成，文本为主。
 
-该系统可以生成不同难度的题目（简单题、中等偏上难度题），也可以生成不同题目类型的题（单选题、主观题）。
+该系统可以生成不同难度的题目（简单题、中等偏上难度题），也可以生成不同题目类型的题（单选题、多选题、主观题）。
 
 ## 介绍
 1. 使用人教版高中学科课本pdf作为RAG的知识库知识，使用MinerU解析pdf获取markdown文件，通过标题作为切分点进行切分，并且基于规则和大模型将诸如讨论、思考、图片等一些与课本知识内容无关的内容去掉，最后使用bge-m3编码并基于Milvus构建分层多粒度向量库。
@@ -11,10 +11,11 @@
     - planner：计划者，对复杂任务进行拆解，在这里主要是让试卷生成分成若干道题目的单独生成。
     - supervisor：监督者，监督RAG、browser-based RAG和reporter四个Agent根据planner的计划依次执行任务，并在计划执行完后进一步判断是否需要额外步骤还是直接结束。
     - RAG：使用RAG技术从课本知识向量库中检索信息用来生成题目，多用于生成简单题目；RAG中使用了HyDE、路由技术、以及bge-reranker-v2-m3。
-    - RAG-based browser：使用RAG之后的检索文档用于网络搜索相关的新闻时事、历史事件或者一些研究报告的搜索，多用于生成融合了课内课外知识的中等难度偏上的题目
+    - RAG-based browser：使用RAG之后的检索文档用于网络搜索相关的新闻时事、历史事件或者一些研究报告的搜索，多用于生成融合了课内课外知识的中等难度偏上的题目。
     - reporter：报告：用于整合先前生成的题目，并且完善题目的不足之处，使之成为一份完整的试卷q
 3. 题目生成模型采用 [https://github.com/OpenLMLab/GAOKAO-Bench] 的数据集在Qwen2.5-14B-Instruct下基于QLora使用一张A800进行SFT，得到quiz-qwen-14B。高考数据集和高中题库数据集由于只有题目、参考答案和解析，并没有上下文（课本知识和课外知识），因此使用Deepseek-r1对题目进行课本知识和课外知识进行提取和扩写，生成伪课内课外知识用于训练。同时SFT中加入basemodel的伪原训练集，以减轻遗忘，该训练集从 [https://github.com/magpie-align/magpie/blob/main/navigation.md] 获得。
-4. 评估使用LLM-as-a-judge进行，prompt在 [https://github.com/sofyc/ConQuer] 的评估prompt基础上加以翻译和修改。
+4. 生成模型采用vllm进行部署，加速推理。
+5. 评估使用LLM-as-a-judge进行，prompt在 [https://github.com/sofyc/ConQuer] 的评估prompt基础上加以翻译和修改。
 
 ## 目前存在问题：
 1. 有时候planner并不能按用户的要求给出计划，比如生成10道题目，但是他只生成了9道；目前解决方案是让supervisor在计划执行完毕后对目前生成情况进行判断是否进一步生成题目。
