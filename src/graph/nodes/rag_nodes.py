@@ -208,31 +208,42 @@ def rag_retrieve(state: State):
     return default_retrieval(state, query_embeddings)
 
 def default_retrieval(state, query_embeddings):
-    # 默认的向量检索逻辑
-    logger.info("Using default vector retrieval")
-    collection = get_collection(DB_URI, COLLECTION_NAME)
+    # 检查 query_embeddings 的类型和结构
+    logger.info(f"Query embeddings type: {type(query_embeddings)}")
     
-    # 使用混合检索
-    search_params = {
-        "subject_value": state["rag"]["subject"],
-        "limit": 5
-    }
+    # 如果 query_embeddings 是字典类型，直接使用它
+    if isinstance(query_embeddings, dict):
+        query_dense_embedding = query_embeddings
+    # 如果是列表且有元素，使用第一个元素
+    elif isinstance(query_embeddings, list) and len(query_embeddings) > 0:
+        query_dense_embedding = query_embeddings[0]
+    else:
+        # 如果是其他情况，记录错误并返回空结果
+        logger.error(f"Unexpected query_embeddings format: {query_embeddings}")
+        updated_rag = {
+            **state['rag'],
+            "retrieved_docs": ["无法检索到相关文档，请尝试其他查询方式。"]
+        }
+        return Command(
+            update={
+                "rag": updated_rag
+            },
+            goto="reranker"
+        )
     
-    results = hybrid_search(
-        col=collection,
-        query_dense_embedding=query_embeddings[0],
-        query_sparse_embedding=query_embeddings[0],
-        **search_params
+    # 使用正确处理后的 query_dense_embedding 进行检索
+    collection = get_collection(DB_URI, COLLECTION_NAME, state["rag"]["subject"])
+    retrieved_docs = hybrid_search(
+        collection=collection,
+        query=state["rag"]['hyde_query'],
+        query_dense_embedding=query_dense_embedding,
+        limit=10
     )
-    
-    # 提取检索结果
-    retrieved_docs = results
     
     updated_rag = {
         **state['rag'],
         "retrieved_docs": retrieved_docs
     }
-    
     return Command(
         update={
             "rag": updated_rag
