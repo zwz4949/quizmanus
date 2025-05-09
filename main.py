@@ -33,9 +33,9 @@ torch.cuda.manual_seed_all(seed)
 
 load_dotenv()  # 加载 .env 文件
 
-test_file_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/test_qwen.json"
-save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_2_5_72b"
-# save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_5244"
+test_file_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/test备份.json"
+# save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_2_5_72b"
+save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_21699"
 
 
 ## 配置logging

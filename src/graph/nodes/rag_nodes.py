@@ -247,6 +247,16 @@ def rag_generator(state: State):
             {'role':'user','content': f"课本内容：{context}\n课外内容：{state['rag']['outer_knowledge']}"}, 
             {'role':'assistant','content': ''}
         ]
+        ## 如果只是获取输入用于batch生成
+        if state['rag']['get_input']:
+            return Command(
+                update = {
+                    "existed_qa": [
+                        messages
+                    ]
+                },
+                goto = "__end__"
+            )
         final_answer_ = get_llm_by_type(type = "qwen",model = state['generate_model'],tokenizer =state['generate_tokenizer']).invoke(messages)
         ## 使用qwen会返回列表
         if len(final_answer_) == 1:

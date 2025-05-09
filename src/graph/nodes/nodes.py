@@ -11,6 +11,7 @@ from ..llms.llms import get_llm_by_type
 from ...config.nodes import TEAM_MEMBERS
 from ..agents.agents import browser_generator, knowledge_searcher
 from ..tools.search import tavily_tool
+from ...config.llms import llm_type,generator_model
 from copy import deepcopy
 import json
 import logging
@@ -114,6 +115,7 @@ def main_planner(state: State):
         full_response = full_response.removesuffix("```")
 
     goto = "supervisor"
+    messages_tmp=[]
     try:
         repaired_response = json_repair.loads(full_response)
         generator_agents = set(['rag_er','rag_and_browser'])
@@ -122,15 +124,16 @@ def main_planner(state: State):
         ## asyncio_generator 串行生成每道题目，目前还没实现并行
         existed_qa,messages = asyncio_generator(state,need_to_generate)
         state['existed_qa'].extend(existed_qa)
-        state['messages'].extend(messages)
+        messages_tmp.extend(messages)
 
     except json.JSONDecodeError:
         logger.warning("Planner response is not a valid JSON")
         goto = "__end__"
-
+    return_value_of_extend = [HumanMessage(content=full_response,name="planner")]
+    return_value_of_extend.extend(messages_tmp) # return_value_of_extend is None
     return Command(
         update={
-            "messages": [HumanMessage(content=full_response,name="planner")],
+            "messages": return_value_of_extend,
             "full_plan": full_response,
         },
         goto=goto,
@@ -143,12 +146,19 @@ def asyncio_generator(state: State,need_to_generate: List):
     '''
     existed_qa = []
     messages = []
+    inputs = []
+    ## 循环获取batch生成题目的输入messages
     for needi in need_to_generate:
         try:
             updated_rag = {
                 **state['rag'],
                 "enable_browser": False if needi['agent_name'] == "rag_er" else True
             }
+            ## True为获取输入用于batch生成
+            if generator_model == "qwen":
+                updated_rag['get_input'] = True
+            else:
+                updated_rag['get_input'] = False
             if "note" in needi and len(needi['note'].strip())>0:
                 next_step_content = f"title: {needi['title']}\ndescription: {needi['description']}\nnote:{needi['note']}"
             else:
@@ -159,9 +169,12 @@ def asyncio_generator(state: State,need_to_generate: List):
             needi_state["next_work"] = next_step_content
             needi_state["rag"] = updated_rag
             rag_state = state['rag_graph'].invoke(needi_state)
-            new_qa = str(rag_state['existed_qa'][-1])
+            if generator_model == "qwen":
+                inputs.append(rag_state['existed_qa'][-1])
+            else:
+                new_qa = rag_state['existed_qa'][-1]
+                existed_qa.append(new_qa)
             new_q = f"题目内容已省略，概括内容为{next_step_content}"
-            existed_qa.append(new_qa)
             messages.append(
                 HumanMessage(
                     content=new_q,
@@ -170,6 +183,9 @@ def asyncio_generator(state: State,need_to_generate: List):
             )
         except Exception as e:
             logger.error(f"asyncio_generator error: {e}")
+    ## batch生成题目
+    existed_qa = get_llm_by_type(type = "qwen",model = state['generate_model'],tokenizer =state['generate_tokenizer']).invoke(inputs)
+    # existed_qa.
     return existed_qa,messages
 
     
