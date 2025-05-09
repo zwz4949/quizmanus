@@ -25,7 +25,7 @@ from ...config.rag import SUBJECTS
 # )
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 def main_coordinator(state: State) -> Command[Literal["planner", "__end__"]]:
     """Coordinator node that communicate with customers."""
@@ -95,10 +95,6 @@ def main_planner(state: State):
     ]
     llm = get_llm_by_type(type = llm_type)
     if state.get("search_before_planning"):
-        # search_system_prompt = '''
-        # 查阅"{{query}}"会涉及的知识点，比如查百度百科、对应书本的目录等，需要得到详细的具体的知识点，比如‘组成细胞的分子’。
-        # '''
-        # # searched_content = tavily_tool.invoke({"query": search_system_prompt.replace("{{query}}",state["ori_query"])})
         searched_content = str(knowledge_searcher.invoke(state)["messages"][-1].content)
         messages = deepcopy(messages)
         messages[
@@ -120,11 +116,18 @@ def main_planner(state: State):
     goto = "supervisor"
     try:
         repaired_response = json_repair.loads(full_response)
+        generator_agents = set(['rag_er','rag_and_browser'])
+        need_to_generate = [resi for resi in repaired_response['steps'] if resi['agent_name'] in generator_agents]
         full_response = json.dumps(repaired_response, ensure_ascii=False, indent=2)
+        ## asyncio_generator 串行生成每道题目，目前还没实现并行
+        existed_qa,messages = asyncio_generator(state,need_to_generate)
+        state['existed_qa'].extend(existed_qa)
+        state['messages'].extend(messages)
+
     except json.JSONDecodeError:
         logger.warning("Planner response is not a valid JSON")
         goto = "__end__"
-    # print(full_response)
+
     return Command(
         update={
             "messages": [HumanMessage(content=full_response,name="planner")],
@@ -132,6 +135,43 @@ def main_planner(state: State):
         },
         goto=goto,
     )
+
+def asyncio_generator(state: State,need_to_generate: List):
+    '''
+    串行生成每道题目，目前还没实现并行
+    返回existed_qa和messages
+    '''
+    existed_qa = []
+    messages = []
+    for needi in need_to_generate:
+        try:
+            updated_rag = {
+                **state['rag'],
+                "enable_browser": False if needi['agent_name'] == "rag_er" else True
+            }
+            if "note" in needi and len(needi['note'].strip())>0:
+                next_step_content = f"title: {needi['title']}\ndescription: {needi['description']}\nnote:{needi['note']}"
+            else:
+                next_step_content = f"title: {needi['title']}\ndescription: {needi['description']}"
+            
+            logger.info("Browser agent starting task")
+            needi_state = {**state}
+            needi_state["next_work"] = next_step_content
+            needi_state["rag"] = updated_rag
+            rag_state = state['rag_graph'].invoke(needi_state)
+            new_qa = str(rag_state['existed_qa'][-1])
+            new_q = f"题目内容已省略，概括内容为{next_step_content}"
+            existed_qa.append(new_qa)
+            messages.append(
+                HumanMessage(
+                    content=new_q,
+                    name=needi['agent_name'],
+                )
+            )
+        except Exception as e:
+            logger.error(f"asyncio_generator error: {e}")
+    return existed_qa,messages
+
     
 RESPONSE_FORMAT = "{}的回复:\n\n<response>\n{}\n</response>\n\n*请执行下一步.*"
 def main_supervisor(state: State) -> Command[Literal[*TEAM_MEMBERS, "__end__"]]:

@@ -17,9 +17,6 @@ TEAM_MEMBER_CONFIGRATIONS = {
     "rag_er": {
         "desc_for_llm": "从现有学科知识库中检索相关课内知识，并且根据这些知识生成一道简单的面向课本知识的题目。"
     },
-    # "browser_generator": {
-    #     "desc_for_llm": "使用搜索引擎和web crawlers在互联网收集知识库中没有的课内知识并且根据这些信息生成一道简单或中等难度偏上面向课本知识的题目"
-    # },
     "rag_and_browser": {
         "desc_for_llm": "从现有学科知识库中检索相关课内知识，并且使用搜索引擎和web crawlers在互联网收集课外知识，并且根据这些信息生成一道中等难度偏上的深度结合课本知识和课外知识的题目"
     },

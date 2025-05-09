@@ -27,18 +27,7 @@ def rerank(query_text: str, search_results: list, reranker: BGERerankFunction =N
             use_fp16=False
         )
     
-    # # 准备重排序的数据对
-    # pairs = [[query_text, doc] for doc in search_results]
-    
-    # # 计算相关性分数
-    # scores = reranker.compute_score(pairs)
-    
-    # # 将结果和分数组合并排序
-    # scored_results = list(zip(search_results, scores))
-    # scored_results.sort(key=lambda x: x[1], reverse=True)
-    
-    # # 返回重排序后的结果
-    # return [item[0] for item in scored_results]
+
     results = reranker(
         query=query_text,
         documents=search_results,

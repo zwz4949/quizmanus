@@ -27,7 +27,7 @@ from ...utils import get_json_result
 import logging
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 def rag_hyde(state: State):
     # 1. 定义 JSON 输出解析器
     parser = JsonOutputParser()

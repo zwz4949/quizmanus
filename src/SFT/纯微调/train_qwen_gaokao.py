@@ -29,9 +29,9 @@ current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 # data_root_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src/SFT/纯微调/gaokao_data"
 data_root_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src/SFT/纯微调/gaokao_data/final_data"
 model_root_path = "/hpc2hdd/home/fye374/models/Qwen"
-module_name = "Qwen2.5-14B-Instruct"
+module_name = "Qwen2.5-7B-Instruct"
 # model_root_path = "/hpc2hdd/home/fye374/models/deepseek-ai"
-# module_name = "DeepSeek-R1-Distill-Qwen-14B"
+# module_name = "DeepSeek-R1-Distill-Qwen-7B"
 output_dir = f"/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src/SFT/纯微调/results/{module_name}/train_{current_time}"
 
 
@@ -96,17 +96,18 @@ def main():
     compute_dtype = getattr(torch, "bfloat16")
     quant_config = BitsAndBytesConfig(
         load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=compute_dtype,
-        bnb_4bit_use_double_quant=True,
+        # bnb_4bit_quant_type="nf4",
+        # bnb_4bit_compute_dtype=compute_dtype,
+        # bnb_4bit_use_double_quant=True,
     )
     # 2. 加载模型
     model = AutoModelForCausalLM.from_pretrained(
         os.path.join(model_root_path,module_name),
-        quantization_config=quant_config,
+        # quantization_config=quant_config,
+        torch_dtype=torch.bfloat16,     # 或者 torch.bfloat16
         trust_remote_code=True,
         device_map="auto",
-        # **kwargs
+        **kwargs
     )
     
     # 调整模型以适应新的tokenizer大小
@@ -134,7 +135,7 @@ def main():
     # 这里使用示例数据集，您可以替换为自己的数据集
     # data = getData(f"{data_root_path}/train.json")
     # dataset = Dataset.from_list(data)
-    dataset = load_dataset("json", data_files=f"{data_root_path}/gaokao_ds_align_(课本课外)_3584.json")['train']
+    dataset = load_dataset("json", data_files=f"{data_root_path}/gaokao_ds_align_(混合)_3584.json")['train']
     print(dataset[0])
     # 5. 配置训练参数
     training_args = SFTConfig(

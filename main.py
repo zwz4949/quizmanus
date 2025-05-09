@@ -1,7 +1,7 @@
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-os.environ['VLLM_ATTENTION_BACKEND'] = 'FLASHINFER'
-os.environ['VLLM_USE_FLASHINFER_SAMPLER'] = '1'
+# os.environ['VLLM_ATTENTION_BACKEND'] = 'FLASHINFER'
+# os.environ['VLLM_USE_FLASHINFER_SAMPLER'] = '1'
 # os.environ["TORCH_CUDA_ARCH_LIST"] = "8.0"
 
 from vllm import LLM, SamplingParams
@@ -37,7 +37,21 @@ test_file_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/test_qwen.jso
 save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_2_5_72b"
 # save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_5244"
 
+
+## 配置logging
+import sys
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - [%(levelname)s] - %(message)s (%(filename)s:%(lineno)d)",
+    handlers=[
+        logging.StreamHandler(sys.stdout) # 输出到标准输出
+    ]
+    # force=True # Python 3.8+ 如果需要覆盖其他可能的早期配置
+)
+
 def run():
+    
     graph = build_main()
     if generator_model == "qwen":
         model_path = qwen_model_path
@@ -51,20 +65,22 @@ def run():
         )
         tokenizer.pad_token = tokenizer.eos_token
 
-        # 2. vLLM LLM 对象
-        compute_dtype = torch.bfloat16
-        model = LLM(
-            model='/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/models/qwen2.5-14b-qlora-gaokao-8271',
-            tensor_parallel_size=1,
-            trust_remote_code=True,
-            load_format="auto",
-            gpu_memory_utilization=0.3,
-            max_model_len=4096,
-            max_num_seqs=16,
-            enforce_eager=True
-            # gpu_memory_utilization = 0.25
-        )
-        pass
+        # # 2. vLLM LLM 对象
+        # compute_dtype = torch.bfloat16
+        # model = LLM(
+        #     model=model_path,
+        #     tensor_parallel_size=1,
+        #     trust_remote_code=True,
+        #     load_format="auto",
+        #     gpu_memory_utilization=0.3,
+        #     max_model_len=4608,
+        #     max_num_seqs=16,
+        #     enforce_eager=False,
+        #     # prefill_parallelism = 1,
+        #     # num_generate_workers = 1
+        # )
+        # pass
+        model = None
     else:
         model = None
         tokenizer = None

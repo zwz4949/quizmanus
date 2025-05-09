@@ -9,7 +9,14 @@ from langchain_ollama import ChatOllama
 import os
 from langchain.schema.runnable import RunnableLambda
 
+import requests
+import json
+
 import torch
+import logging
+logger = logging.getLogger(__name__)
+# logger.setLevel(logging.DEBUG)
+
 def getClient()->OpenAI:
     client = OpenAI(
         base_url=openai_api_base, 
@@ -99,20 +106,36 @@ def get_llm_by_type(type,model = None,tokenizer = None):
             - 一种是messages = [{"role":...,"content":...}],目前用这种生成单个题目
             - 另一种是[messages,messages...]，后续会考虑用这种生成一个batch的题目
             ''' 
+
+            url = "http://0.0.0.0:8000/generate"
+            headers = {"Content-Type": "application/json"}
+            
             if len(x)>0:
+                # if isinstance(x[0],dict):
+                #     ## 改用vllm
+                #     gen = model.generate([prepare_input(x,tokenizer)], vllm_sampling_params)
+                #     result = gen[0]
+                #     return [result.outputs[0].text.split("assistant")[-1].strip()]
+                # elif isinstance(x[0],list):
+                #     tmp_input = [prepare_input(xi,tokenizer) for xi in x]
+                #     ## 改用vllm
+                #     gen = model.generate(tmp_input, vllm_sampling_params)
+                #     result = [geni.outputs[0].text.split("assistant")[-1].strip() for geni in gen]
+                #     return result
                 if isinstance(x[0],dict):
                     ## 改用vllm
-                    gen = model.generate([prepare_input(x,tokenizer)], vllm_sampling_params)
-                    result = gen[0]
-                    return [result.outputs[0].text.split("assistant")[-1].strip()]
+                    data = {"prompts": [prepare_input(x,tokenizer)]}
                 elif isinstance(x[0],list):
                     tmp_input = [prepare_input(xi,tokenizer) for xi in x]
-                    ## 改用vllm
-                    gen = model.generate(tmp_input, vllm_sampling_params)
-                    result = [geni.outputs[0].text.split("assistant")[-1].strip() for geni in gen]
+                    data = {"prompts": tmp_input}
+                try:
+                    response = requests.post(url, headers=headers, data=json.dumps(data))
+                    response.raise_for_status()  # 如果响应状态码不是 200 OK，则抛出异常
+                    result = response.json()
                     return result
-
-        
+                except requests.exceptions.RequestException as e:
+                    logger.error(f"请求发生错误: {e}")
+            return []
             
         # 将模型包装为 Runnable
         llm = RunnableLambda(lambda x: single_generate(x, model, tokenizer))

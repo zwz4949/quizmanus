@@ -1,4 +1,6 @@
 # from typing_extensions import TypedDict
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 from langgraph.graph import MessagesState
 from typing import List, Dict, TypedDict, Literal, Optional, Annotated, Union
 from operator import add
@@ -13,6 +15,10 @@ embeddings = BGEM3EmbeddingFunction(
     model_name = "/hpc2hdd/home/fye374/models/BAAI/bge-m3",
     use_fp16=False, 
     device="cuda")
+
+# print(embeddings(["who are you"])['dense'][0])
+# print(embeddings(["who are you"])['sparse']._getrow(0))
+
 
 reranker = BGERerankFunction(
     model_name="/hpc2hdd/home/fye374/models/BAAI/bge-reranker-v2-m3",  
