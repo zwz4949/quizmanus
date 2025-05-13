@@ -11,7 +11,7 @@ from ..llms.llms import get_llm_by_type
 from ...config.nodes import TEAM_MEMBERS
 from ..agents.agents import browser_generator, knowledge_searcher
 from ..tools.search import tavily_tool
-from ...config.llms import llm_type,generator_model
+from ...config.llms import llm_type,generator_model,reporter_llm_type,planner_llm_type,supervisor_llm_type
 from copy import deepcopy
 import json
 import logging
@@ -19,6 +19,7 @@ import json_repair
 from ...utils import get_json_result,call_Hkust_api
 from ...config.llms import llm_type
 from ...config.rag import SUBJECTS
+import re
 # Configure logging
 # logging.basicConfig(
 #     level=logging.INFO,
@@ -38,10 +39,11 @@ def main_coordinator(state: State) -> Command[Literal["planner", "__end__"]]:
         ),
         HumanMessage(content=f'''当前查询：{state["ori_query"]}''')
     ]
-    response_content = get_llm_by_type(type = llm_type).invoke(messages).content
-    logger.debug(f"Current state messages: {state['messages']}")
+    
+    response_content = re.sub(r'<think>.*?</think>', '', get_llm_by_type(type = llm_type).invoke(messages).content, flags=re.DOTALL).strip()
+    logger.info(f"Current state messages: {state['messages']}")
     # 尝试修复可能的JSON输出
-    logger.debug(f"Coordinator response: {response_content}")
+    logger.info(f"Coordinator response: {response_content}")
 
     goto = "__end__"
     if "handoff_to_planner" in response_content:
@@ -65,7 +67,7 @@ def main_planner(state: State):
                     ),
                     HumanMessage(content=f'''当前查询：{state["ori_query"]}''')
                 ]
-                response = get_llm_by_type(type = llm_type).invoke(messages).content
+                response = re.sub(r'<think>.*?</think>', '', get_llm_by_type(type = llm_type).invoke(messages).content, flags=re.DOTALL).strip()
                 # 5. 解析JSON输出
                 parser = JsonOutputParser()
                 result = parser.parse(response)
@@ -73,17 +75,17 @@ def main_planner(state: State):
                 # 6. 验证结果是否在可用知识库中
                 # valid_sources = {t["name"] for t in VECTORSTORES}
                 if result["subject"] not in SUBJECTS:
-                    print(f"第{i+1}次尝试：选择的知识库不存在: {result['subject']}")
+                    logger.warning(f"第{i+1}次尝试：选择的知识库不存在: {result['subject']}")
                     # return Command(
                     #     goto = "__end__"
                     # )
                     continue
-                print("router",result["subject"])
+                logger.info(f"router: {result["subject"]}")
                 return result["subject"]
             except Exception as e:
-                print(f"模型返回非法JSON: {response} {e}")
+                logger.warning(f"模型返回非法JSON: {response} {e}")
             except KeyError as e:
-                print(f"模型返回缺少必要字段: {response} {e}")
+                logger.warning(f"模型返回缺少必要字段: {response} {e}")
         return "无可用知识库"
     # 1. 定义 JSON 输出解析器
     subject = inner_router()
@@ -94,19 +96,33 @@ def main_planner(state: State):
         ),
         HumanMessage(content=f'''当前查询：{state["ori_query"]}''')
     ]
-    llm = get_llm_by_type(type = llm_type)
+    llm = get_llm_by_type(type = planner_llm_type)
+    
     if state.get("search_before_planning"):
         searched_content = str(knowledge_searcher.invoke(state)["messages"][-1].content)
         messages = deepcopy(messages)
         messages[
             -1
         ].content += f"\n\n# 相关搜索结果\n\n{searched_content}"
-    stream = llm.stream(messages)
     full_response = ""
-    for chunk in stream:
-        full_response += chunk.content
-    logger.debug(f"Current state messages: {state['messages']}")
-    logger.debug(f"Planner response: {full_response}")
+    # 报错重传
+    for i in range(3):
+        try:
+            stream = llm.stream(messages)
+            full_response = ""
+            for chunk in stream:
+                full_response += chunk.content
+        except Exception as e:
+            logger.warning(f"plan生成报错：{e}，重试第{i+1}次。")
+            if i == 2:
+                try:
+                    full_response = llm.invoke(messages)
+                except Exception as e1:
+                    logger.warning(f"plan生成报错：{e1}")
+                    raise Exception("网络错误")
+    full_response = re.sub(r'<think>.*?</think>', '', full_response, flags=re.DOTALL).strip()
+    logger.info(f"Current state messages: {state['messages']}")
+    logger.info(f"Planner response: {full_response}")
 
     if full_response.startswith("```json"):
         full_response = full_response.removeprefix("```json")
@@ -183,8 +199,9 @@ def asyncio_generator(state: State,need_to_generate: List):
             )
         except Exception as e:
             logger.error(f"asyncio_generator error: {e}")
-    ## batch生成题目
-    existed_qa = get_llm_by_type(type = "qwen",model = state['generate_model'],tokenizer =state['generate_tokenizer']).invoke(inputs)
+    if generator_model == "qwen":
+        ## batch生成题目
+        existed_qa = get_llm_by_type(type = "qwen",model = state['generate_model'],tokenizer =state['generate_tokenizer']).invoke(inputs)
     # existed_qa.
     return existed_qa,messages
 
@@ -216,23 +233,20 @@ def main_supervisor(state: State) -> Command[Literal[*TEAM_MEMBERS, "__end__"]]:
                     {"role": role_mapping[msg["type"]], "content": msg['data']["content"],"name":msg['data']['name']}
                     for msg in dict_messages
                 ]
-                print("使用hkust-deepseek-r1")
+                logger.info("使用hkust-deepseek-r1")
                 response = call_Hkust_api(prompt = "",messages = openai_format)
                 parsed_response = get_json_result(response)
             else:
-                response = (
-                    get_llm_by_type(llm_type)
-                    # .with_structured_output(schema=Router, method="json_mode")
-                    .invoke(messages)
-                )
-                parsed_response = get_json_result(response.content)
+                response = get_llm_by_type(supervisor_llm_type).invoke(messages).content
+                response_content = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL).strip()
+                parsed_response = get_json_result(response_content)
             goto = parsed_response["next"]
             next_step_content = parsed_response["next_step_content"]
             break
         except Exception as e:
-            print(f"supervisor出错了：{e}")
-    logger.debug(f"Current state messages: {state['messages']}")
-    logger.debug(f"Supervisor response: {response}")
+            logger.warning(f"supervisor出错了：{e}")
+    logger.info(f"Current state messages: {state['messages']}")
+    logger.info(f"Supervisor response: {response_content}")
 
     if goto == "FINISH":
         goto = "__end__"
@@ -272,10 +286,6 @@ def main_browser_generator(state: State) -> Command[Literal["supervisor"]]:
             logger.error(f"Browser agent failed with error: {e}")
             response_content = ""
             return Command(goto="__end__")
-    # 尝试修复可能的JSON输出
-    # response_content = repair_json_output(response_content)
-    # logger.debug(f"Browser agent response: {response_content}")
-    # print(f"Browser agent response: {response_content}")
     return Command(
         update={
             "messages": [
@@ -304,7 +314,7 @@ def main_rag(state: State) -> Command[Literal["supervisor"]]:
     logger.info("RAG agent completed task")
     # 尝试修复可能的JSON输出
     # response_content = repair_json_output(response_content)
-    logger.debug(f"RAG agent response: {new_qa}")
+    logger.info(f"RAG agent response: {new_qa}")
     return Command(
         update={
             "existed_qa": [new_qa],
@@ -333,7 +343,7 @@ def main_rag_browser(state: State) -> Command[Literal["supervisor"]]:
     logger.info("RAG agent completed task")
     # 尝试修复可能的JSON输出
     # response_content = repair_json_output(response_content)
-    logger.debug(f"RAG agent response: {new_qa}")
+    logger.info(f"RAG agent response: {new_qa}")
     return Command(
         update={
             "existed_qa": [new_qa],
@@ -359,12 +369,11 @@ def main_reporter(state: State) -> Command[Literal["supervisor"]]:
         ]
     }
     messages = apply_prompt_template("reporter", tmp_state)
-    response = get_llm_by_type(llm_type).invoke(messages)
-    logger.debug(f"Current state messages: {state['messages']}")
-    response_content = response.content
+    response_content = re.sub(r'<think>.*?</think>', '', get_llm_by_type(reporter_llm_type).invoke(messages).content, flags=re.DOTALL).strip()
+    logger.info(f"Current state messages: {state['messages']}")
     # 尝试修复可能的JSON输出
     # response_content = repair_json_output(response_content)
-    logger.debug(f"reporter response: {response_content}")
+    logger.info(f"reporter response: {response_content}")
 
     return Command(
         update={

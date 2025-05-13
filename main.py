@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 # os.environ['VLLM_ATTENTION_BACKEND'] = 'FLASHINFER'
 # os.environ['VLLM_USE_FLASHINFER_SAMPLER'] = '1'
 # os.environ["TORCH_CUDA_ARCH_LIST"] = "8.0"
@@ -35,20 +35,41 @@ load_dotenv()  # 加载 .env 文件
 
 test_file_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/dataset/test备份.json"
 # save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_2_5_72b"
-save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_14b_quiz_21699"
+save_dir = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/quiz_results/qwen_7b_full_quiz_gemini_40303"
 
 
 ## 配置logging
+# import sys
+# import logging
+# logging.basicConfig(
+#     level=logging.DEBUG,
+#     format="%(asctime)s - %(name)s - [%(levelname)s] - %(message)s (%(filename)s:%(lineno)d)",
+#     handlers=[
+#         logging.StreamHandler(sys.stdout) # 输出到标准输出
+#     ]
+#     # force=True # Python 3.8+ 如果需要覆盖其他可能的早期配置
+# )
 import sys
 import logging
+
+# 创建 StreamHandler 实例
+console_handler = logging.StreamHandler(sys.stdout)
+
+# *** 在这里设置 StreamHandler 的级别为 INFO ***
+console_handler.setLevel(logging.INFO)
+
+# 配置 basicConfig，将设置好级别的 console_handler 传入
+# basicConfig 的 level 仍然可以保留 DEBUG，这样如果以后你添加了其他 Handler (比如 FileHandler)
+# 它们可以根据自己的设置来决定是否处理 DEBUG 消息
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.DEBUG, # Logger 的级别仍然是 DEBUG，可以捕获所有消息
     format="%(asctime)s - %(name)s - [%(levelname)s] - %(message)s (%(filename)s:%(lineno)d)",
     handlers=[
-        logging.StreamHandler(sys.stdout) # 输出到标准输出
+        console_handler # 将已设置好级别的 handler 传入
     ]
     # force=True # Python 3.8+ 如果需要覆盖其他可能的早期配置
 )
+
 
 def run():
     
@@ -92,9 +113,9 @@ def run():
     saveData(tmp_test,test_file_path)
     for idx,file_item in enumerate(tqdm(getData(test_file_path))):
         # if idx+1 <3:
-        #     continue
-        # if idx+1 not in [3,7,11,12,14]:
-        #     continue
+            # continue
+        if idx+1 <=13:
+            continue
         user_input = file_item['query']
 
         # embeddings
@@ -170,6 +191,6 @@ def statistic():
             
 if __name__ == '__main__':
 
-    run()
-    # test()
-    # statistic()
+    # run()
+    test()
+    statistic()

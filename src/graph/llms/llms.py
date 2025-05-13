@@ -2,7 +2,7 @@
 from openai import OpenAI
 import ollama
 import sys
-from ...config.llms import openai_model, openai_api_key, openai_api_base, ollama_model, ollama_num_ctx,vllm_sampling_params
+from ...config.llms import openai_model, openai_api_key, openai_api_base, ollama_model, ollama_num_ctx,vllm_sampling_params,gemini_api_base,gemini_api_key,gemini_model
 
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
@@ -72,6 +72,16 @@ def get_llm_by_type(type,model = None,tokenizer = None):
             # max_tokens = 12280,
             # max_completion_tokens = None
         )
+    elif type == "gemini":
+        llm = ChatOpenAI(
+            model=gemini_model,
+            api_key=gemini_api_key,  # 替换为你的实际API密钥
+            base_url=gemini_api_base,  # 默认是OpenAI官方，可改为自建服务地址
+            temperature=0.7,
+            max_retries = 3
+            # max_tokens = 12280,
+            # max_completion_tokens = None
+        )
     elif type == "ollama":
         # 初始化 Ollama（默认连接本地 http://localhost:11434）
         # llm = ChatOllama(
@@ -107,7 +117,7 @@ def get_llm_by_type(type,model = None,tokenizer = None):
             - 另一种是[messages,messages...]，后续会考虑用这种生成一个batch的题目
             ''' 
 
-            url = "http://0.0.0.0:8000/generate"
+            url = "http://0.0.0.0:18001/generate"
             headers = {"Content-Type": "application/json"}
             
             if len(x)>0:

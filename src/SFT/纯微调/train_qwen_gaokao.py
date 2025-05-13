@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import sys
 sys.path.append('/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src')
 from datasets import load_dataset,Dataset
@@ -29,7 +29,7 @@ current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 # data_root_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src/SFT/纯微调/gaokao_data"
 data_root_path = "/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src/SFT/纯微调/gaokao_data/final_data"
 model_root_path = "/hpc2hdd/home/fye374/models/Qwen"
-module_name = "Qwen2.5-7B-Instruct"
+module_name = "Qwen2.5-14B-Instruct"
 # model_root_path = "/hpc2hdd/home/fye374/models/deepseek-ai"
 # module_name = "DeepSeek-R1-Distill-Qwen-7B"
 output_dir = f"/hpc2hdd/home/fye374/ZWZ_Other/quizmanus/src/SFT/纯微调/results/{module_name}/train_{current_time}"
@@ -96,14 +96,14 @@ def main():
     compute_dtype = getattr(torch, "bfloat16")
     quant_config = BitsAndBytesConfig(
         load_in_4bit=True,
-        # bnb_4bit_quant_type="nf4",
-        # bnb_4bit_compute_dtype=compute_dtype,
-        # bnb_4bit_use_double_quant=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=compute_dtype,
+        bnb_4bit_use_double_quant=True,
     )
     # 2. 加载模型
     model = AutoModelForCausalLM.from_pretrained(
         os.path.join(model_root_path,module_name),
-        # quantization_config=quant_config,
+        quantization_config=quant_config,
         torch_dtype=torch.bfloat16,     # 或者 torch.bfloat16
         trust_remote_code=True,
         device_map="auto",
@@ -135,7 +135,7 @@ def main():
     # 这里使用示例数据集，您可以替换为自己的数据集
     # data = getData(f"{data_root_path}/train.json")
     # dataset = Dataset.from_list(data)
-    dataset = load_dataset("json", data_files=f"{data_root_path}/gaokao_ds_align_(混合)_3584.json")['train']
+    dataset = load_dataset("json", data_files=f"{data_root_path}/gaokao_ds_align_(混合_cn_en_20000)_3584.json")['train']
     print(dataset[0])
     # 5. 配置训练参数
     training_args = SFTConfig(
@@ -152,7 +152,7 @@ def main():
         # save_total_limit=3,
         save_strategy="epoch",
         bf16=True,  # 使用混合精度训练
-        max_length=3584,  # 最大序列长度
+        max_seq_length=3584,  # 最大序列长度
         # packing=True,  # 启用序列打包以提高效率
         # dataset_text_field="text",  # 数据集中文本字段的名称
         disable_tqdm= False
@@ -179,29 +179,6 @@ def main():
 
 # 自定义格式化函数，用于将数据集中的对话格式化为Qwen模型期望的格式
 def format_chat(example,tokenizer):
-    # if "instruction" in example:
-    #     SYSTEM_PROMPT = '''# 角色说明
-    # 你是一个好助手，请帮我回答问题。'''
-
-    #     messages=[
-    #         {'role':'system','content':example['system']}, 
-    #         {'role':'user','content': example['instruction']}, 
-    #         {'role':'assistant','content': example['response']}
-    #     ]
-    # else:
-    #     SYSTEM_PROMPT = '''# 角色说明
-    # 你是一个根据课本内容和课外内容生成{type}的专家，给定一段{subject}的课本内容和一段相关的课外内容，请根据他们生成一道高考{type}。
-
-    # # 回答格式
-    # 题干；...
-    # 参考答案：...
-    # 解析：...'''
-
-    #     messages=[
-    #         {'role':'system','content':SYSTEM_PROMPT.format(type= example['type'],subject = example['subject'])}, 
-    #         {'role':'user','content': f"课本内容：{example['课本内容']}\n课外内容：{example['课外内容']}"}, 
-    #         {'role':'assistant','content': f'题干：{example['question']}\n\n参考答案：{example['answer']}\n\n解析：{example['analysis']}'}
-    #     ]
     messages=[
             {'role':'system','content':example['system']}, 
             {'role':'user','content': example['instruction']}, 

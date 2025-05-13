@@ -4,6 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
 from langchain_core.output_parsers import JsonOutputParser
 from jinja2 import Template
+import re
 # import sys
 # import ollama
 # from ..config.rag import VECTORSTORES
@@ -20,7 +21,7 @@ from ...config.rag import DB_URI, COLLECTION_NAME, SUBJECTS
 from ...RAG.vector_store_utils import get_collection
 from ...RAG.retrieval import hybrid_search
 from ...RAG.reranker import rerank
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from ...config.llms import llm_type,generator_model
 from ...config.nodes import QUESTION_TYPES
 from ...utils import get_json_result
@@ -48,11 +49,11 @@ def rag_hyde(state: State):
     
     # for i in range(3):
     # 4. 调用模型（假设 ollama.generate 返回原始文本）
-    rewrite_res = get_llm_by_type(type = llm_type).invoke(messages).content
+    rewrite_res = re.sub(r'<think>.*?</think>', '', get_llm_by_type(type = llm_type).invoke(messages).content, flags=re.DOTALL).strip()
     # 5. 用 JsonOutputParser 解析结果
     try:
         parsed_output = parser.parse(rewrite_res)
-        print("hyde",parsed_output)
+        logger.info(f"hyde: {parsed_output}")
         updated_rag = {
             **state['rag'],
             "hyde_query": parsed_output["hyde_query"]
@@ -66,7 +67,7 @@ def rag_hyde(state: State):
         )
     except Exception as e:
         # 如果解析失败，返回原始查询或抛出错误
-        print(f"第{i+1}次尝试：res: {rewrite_res} error: {e}")
+        logger.warning(f"第{i+1}次尝试：res: {rewrite_res} error: {e}")
     
     return Command(
         goto = "__end__"
@@ -102,7 +103,7 @@ def rag_router(state: State):
     # 4. 调用模型（建议开启JSON模式）
     # for i in range(3):
     try:
-        response = get_llm_by_type(type = llm_type).invoke(messages).content
+        response = re.sub(r'<think>.*?</think>', '', get_llm_by_type(type = llm_type).invoke(messages).content, flags=re.DOTALL).strip()
         
         # 5. 解析JSON输出
         parser = JsonOutputParser()
@@ -111,13 +112,13 @@ def rag_router(state: State):
         # 6. 验证结果是否在可用知识库中
         # valid_sources = {t["name"] for t in VECTORSTORES}
         if result["subject"] not in SUBJECTS:
-            print(f"第{i+1}次尝试：选择的知识库不存在: {result['subject']}")
+            logger.warning(f"第{i+1}次尝试：选择的知识库不存在: {result['subject']}")
             # return Command(
             #     goto = "__end__"
             # )
             
-        print("router",result["subject"])
-        print("type",result["question_type"])
+        logger.info(f"router: {result["subject"]}")
+        logger.info(f"type: {result["question_type"]}")
         updated_rag = {
             **state['rag'],
             "subject": result["subject"],
@@ -131,9 +132,9 @@ def rag_router(state: State):
         )
         
     except Exception as e:
-        print(f"模型返回非法JSON: {response} {e}")
+        logger.error(f"模型返回非法JSON: {response} {e}")
     except KeyError as e:
-        print(f"模型返回缺少必要字段: {response} {e}")
+        logger.error(f"模型返回缺少必要字段: {response} {e}")
     return Command(
         goto = "__end__"
     )
@@ -154,7 +155,6 @@ def rag_retrieve(state:State):
         dense_weight=1.0,
         limit = 10
     )
-    # print("retrieved_docs",hybrid_results)
     updated_rag = {
         **state['rag'],
         "retrieved_docs": hybrid_results
@@ -173,7 +173,6 @@ def rag_reranker(state: State):
         search_results = state["rag"]['retrieved_docs'], 
         reranker = state["rag"]['reranker_model'],
         topk = 1)
-    # print("reranked_docs",reranked_docs)
     updated_rag = {
         **state['rag'], 
         "reranked_docs": reranked_docs,
@@ -204,11 +203,7 @@ def rag_reranker(state: State):
                 **updated_rag, 
                 "outer_knowledge": outer_knowledge
             }
-                # return Command(goto="__end__")
-        # 尝试修复可能的JSON输出
-        # response_content = repair_json_output(response_content)
-        # logger.debug(f"Browser agent response: {response_content}")
-        print(f"Browser agent response: {outer_knowledge}")
+        logger.info(f"Browser agent response: {outer_knowledge}")
 
     return Command(
         update = {
@@ -223,7 +218,6 @@ def rag_generator(state: State):
     parser = JsonOutputParser()
     
     pass_qa = str(state["existed_qa"])
-    # print(state["rag"]["rerank_docs"])
     if len(state["rag"]["reranked_docs"]) == 0:
         context = "\n\n".join(
             state["rag"]["retrieved_docs"]
@@ -275,13 +269,13 @@ def rag_generator(state: State):
         question_type = '\n'.join([QUESTION_TYPES[key]['desc_for_llm'] for key in QUESTION_TYPES])
         messages=[
             {'role':'system','content':SYSTEM_PROMPT.format(type= state['rag']['type'],subject = state['rag']['subject'],question_type = question_type)}, 
-            {'role':'user','content': f"课本内容：{context}\n课外内容：{state['rag']['outer_knowledge']}"}, 
-            {'role':'assistant','content': ''}
+            {'role':'user','content': f"课本内容：{context}\n课外内容：{state['rag']['outer_knowledge']}"}
         ]
-        final_answer = get_llm_by_type(type = generator_model).invoke(messages).content
-    
+        # response = get_llm_by_type(type = generator_model).invoke(messages_langchain_format)
+        final_answer = re.sub(r'<think>.*?</think>', '', get_llm_by_type(type = generator_model).invoke(messages).content, flags=re.DOTALL).strip()
+        
     # parsed_output = parser.parse(final_answer)
-    print("final_answer: ",final_answer)
+    logger.info(f"final_answer: {final_answer}")
     # return parsed_output
     return Command(
         update = {

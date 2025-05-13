@@ -79,9 +79,9 @@ async def startup_event():
         tensor_parallel_size=1,
         trust_remote_code=True,
         load_format="auto",
-        gpu_memory_utilization=0.7,
+        gpu_memory_utilization=0.5,
         # max_model_len=4608,
-        max_num_seqs=16,
+        # max_num_seqs=16,
         enforce_eager=False,
     )
     """
@@ -180,7 +180,7 @@ async def generate(req: Request):
 # 如果你直接运行这个脚本来启动 FastAPI
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=18001)
 
 
 

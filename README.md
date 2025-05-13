@@ -16,6 +16,13 @@
 3. 题目生成模型采用 [https://github.com/OpenLMLab/GAOKAO-Bench] 的数据集在Qwen2.5-14B-Instruct下基于QLora使用一张A800进行SFT，得到quiz-qwen-14B。高考数据集和高中题库数据集由于只有题目、参考答案和解析，并没有上下文（课本知识和课外知识），因此使用Deepseek-r1对题目进行课本知识和课外知识进行提取和扩写，生成伪课内课外知识用于训练。同时SFT中加入basemodel的伪原训练集，以减轻遗忘，该训练集从 [https://github.com/magpie-align/magpie/blob/main/navigation.md] 获得。
 4. 生成模型采用vllm进行部署，加速推理。
 5. 评估使用LLM-as-a-judge进行，prompt在 [https://github.com/sofyc/ConQuer] 的评估prompt基础上加以翻译和修改。
+6. 同时我们也对SFT之后的生成模型进行在通用数据集（MMLU和MMLU Pro以及CMMLU）上的测试，评估结果如下：
+
+| models                                                 | MMLU Pro | MMLU | CMMLU | llm  |
+| ------------------------------------------------------ | -------- | ---- | ----- | ---- |
+| Qwen-2.5-7B-Instruct                                   | 0.5312   | 74.2 | 77.09 |      |
+| Qwen-2.5-7B-Instruct-LoRA-Quiz-SFT(没有对齐数据集）    | 44.93    | 70.7 | 75.20 | 4.50 |
+| Qwen-2.5-7B-Instruct-LoRA-Quiz-SFT | 48.65    | 71.3 | 76.73 | 4.44 |
 
 ## 目前存在问题：
 1. 有时候planner并不能按用户的要求给出计划，比如生成10道题目，但是他只生成了9道；目前解决方案是让supervisor在计划执行完毕后对目前生成情况进行判断是否进一步生成题目。
